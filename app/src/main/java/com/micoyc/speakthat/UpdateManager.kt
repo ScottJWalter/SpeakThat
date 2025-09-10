@@ -65,13 +65,27 @@ class UpdateManager private constructor(private val context: Context) {
         private const val BUILD_FLAVOR_GITHUB = "github"
         private const val BUILD_FLAVOR_GOOGLE_PLAY = "googleplay"
         
-        @Volatile
-        private var INSTANCE: UpdateManager? = null
+        // Use WeakReference to prevent memory leaks
+        // This allows the UpdateManager to be garbage collected when not in use
+        private var instanceRef: java.lang.ref.WeakReference<UpdateManager>? = null
         
         fun getInstance(context: Context): UpdateManager {
-            return INSTANCE ?: synchronized(this) {
-                INSTANCE ?: UpdateManager(context.applicationContext).also { INSTANCE = it }
+            // Try to get existing instance from weak reference
+            var instance = instanceRef?.get()
+            
+            if (instance == null) {
+                // Create new instance if none exists or was garbage collected
+                synchronized(this) {
+                    instance = instanceRef?.get()
+                    if (instance == null) {
+                        instance = UpdateManager(context.applicationContext)
+                        instanceRef = java.lang.ref.WeakReference(instance)
+                        Log.d(TAG, "Created new UpdateManager instance")
+                    }
+                }
             }
+            
+            return instance!!
         }
     }
     
@@ -86,8 +100,8 @@ class UpdateManager private constructor(private val context: Context) {
         .build()
     
     /**
-     * Robust detection of Google Play Store installation
-     * Uses multiple verification methods to prevent false positives
+     * Check if app was installed from Google Play Store
+     * Uses only the installer package name check, which is the most reliable method
      * @return true if app was installed from Google Play Store
      */
     fun isInstalledFromGooglePlay(): Boolean {
@@ -95,46 +109,93 @@ class UpdateManager private constructor(private val context: Context) {
         val cachedResult = prefs.getBoolean(KEY_GOOGLE_PLAY_DETECTED, false)
         if (cachedResult) {
             Log.d(TAG, "Using cached Google Play detection result: true")
+            InAppLogger.logSystemEvent("Using cached Google Play detection: true", "UpdateManager")
             return true
         }
         
         try {
-            Log.d(TAG, "Performing fresh Google Play installation detection...")
+            Log.d(TAG, "Performing simple Google Play installation detection...")
+            InAppLogger.logSystemEvent("Performing simple Google Play detection", "UpdateManager")
             
-            // Log detailed debug info for troubleshooting
-            logInstallationSourceDetails()
-            
-            // ULTRA-CONSERVATIVE APPROACH: Only trust installer package name
-            // This is the most reliable method and prevents false positives
+            // SIMPLE DETECTION: Only check installer package name
+            // This is the most reliable method according to Android best practices
             val installerPackage = getInstallerPackageName()
             Log.d(TAG, "Installer package: $installerPackage")
+            InAppLogger.logSystemEvent("Installer package detected: $installerPackage", "UpdateManager")
             
-            // Only consider it Google Play if installer package is explicitly Google Play
-            if (installerPackage == GOOGLE_PLAY_STORE_PACKAGE) {
-                Log.i(TAG, "Google Play Store detected via installer package - ULTRA-CONSERVATIVE")
-                cacheGooglePlayDetection(true)
-                return true
-            }
+            // Only consider it Google Play if installer package is exactly "com.android.vending"
+            val isGooglePlay = installerPackage == GOOGLE_PLAY_STORE_PACKAGE
             
-            // Alternative Google Play installer package (less common)
-            if (installerPackage == GOOGLE_PLAY_STORE_PACKAGE_ALT) {
-                Log.i(TAG, "Google Play Store detected via alternative installer package - ULTRA-CONSERVATIVE")
-                cacheGooglePlayDetection(true)
-                return true
-            }
+            Log.i(TAG, "Detection result: ${if (isGooglePlay) "Google Play" else "Non-Google Play"}")
+            InAppLogger.logSystemEvent("Detection result: ${if (isGooglePlay) "Google Play" else "Non-Google Play"}", "UpdateManager")
             
-            // For all other cases (null, unknown, other stores), assume NOT Google Play
-            // This is the safest approach to prevent false positives
-            Log.d(TAG, "Installer package is not Google Play: '$installerPackage' - assuming NOT from Google Play for safety")
-            cacheGooglePlayDetection(false)
-            return false
+            cacheGooglePlayDetection(isGooglePlay)
+            return isGooglePlay
             
         } catch (e: Exception) {
-            Log.e(TAG, "Error detecting installation source", e)
+            Log.e(TAG, "Error in Google Play detection", e)
+            InAppLogger.logSystemEvent("Error in Google Play detection: ${e.message}", "UpdateManager")
             // On error, assume NOT from Google Play to prevent blocking legitimate updates
             cacheGooglePlayDetection(false)
             return false
         }
+    }
+    
+    /**
+     * Check if app was installed from a repository (F-Droid, IzzyOnDroid, etc.)
+     * @return true if app was installed from a repository
+     */
+    fun isInstalledFromRepository(): Boolean {
+        try {
+            val installerPackage = getInstallerPackageName()
+            Log.d(TAG, "Checking repository installation, installer: $installerPackage")
+            
+            // Common repository installer packages
+            val repositoryPackages = listOf(
+                "org.fdroid.fdroid",           // F-Droid
+                "com.fdroid.fdroid",           // F-Droid (alternative)
+                "de.izzysoft.fdroid",          // IzzyOnDroid
+                "com.aurora.store",             // Aurora Store
+                "com.aurora.services",          // Aurora Services
+                "com.android.vending.billing.InAppBillingService.COIN" // Some alternative stores
+            )
+            
+            val isFromRepository = installerPackage != null && 
+                                 installerPackage != GOOGLE_PLAY_STORE_PACKAGE &&
+                                 repositoryPackages.any { installerPackage.contains(it) }
+            
+            Log.i(TAG, "Repository detection result: ${if (isFromRepository) "Repository" else "Not Repository"}")
+            InAppLogger.logSystemEvent("Repository detection: ${if (isFromRepository) "Repository" else "Not Repository"}", "UpdateManager")
+            
+            return isFromRepository
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in repository detection", e)
+            InAppLogger.logSystemEvent("Error in repository detection: ${e.message}", "UpdateManager")
+            return false
+        }
+    }
+    
+    /**
+     * Check if auto-updates should be enabled for this installation
+     * Repository users should get updates from their repository instead
+     * @return true if auto-updates should be enabled
+     */
+    fun shouldEnableAutoUpdates(): Boolean {
+        // Google Play users can use auto-updates
+        if (isInstalledFromGooglePlay()) {
+            return true
+        }
+        
+        // Repository users should get updates from their repository
+        if (isInstalledFromRepository()) {
+            Log.i(TAG, "Auto-updates disabled for repository installation")
+            InAppLogger.logSystemEvent("Auto-updates disabled for repository installation", "UpdateManager")
+            return false
+        }
+        
+        // For other installations (direct APK, etc.), allow auto-updates
+        return true
     }
     
     /**
@@ -171,46 +232,7 @@ class UpdateManager private constructor(private val context: Context) {
         }
     }
     
-    /**
-     * Check if app has Google Play signature characteristics
-     * This is a fallback method for edge cases
-     */
-    private fun hasGooglePlaySignatureCharacteristics(): Boolean {
-        return try {
-            val packageInfo = context.packageManager.getPackageInfo(
-                context.packageName,
-                PackageManager.GET_SIGNATURES
-            )
-            
-            // Google Play apps typically have specific signature characteristics
-            // This is a conservative check to avoid false positives
-            val signatures = packageInfo.signatures
-            if (signatures != null && signatures.isNotEmpty()) {
-                val signature = signatures[0]
-                val signatureString = signature.toCharsString()
-                
-                Log.d(TAG, "App signature: $signatureString")
-                
-                // Check for Google Play signature patterns (very conservative)
-                // Only flag as Google Play if we're very confident
-                // Google Play apps typically have signatures containing specific patterns
-                val hasGooglePattern = signatureString.contains("google", ignoreCase = true)
-                val hasAndroidPattern = signatureString.contains("android", ignoreCase = true)
-                
-                Log.d(TAG, "Signature analysis - Google pattern: $hasGooglePattern, Android pattern: $hasAndroidPattern")
-                
-                // Only consider it a Google Play app if it has Google-specific patterns
-                // Android pattern alone is too broad and would catch development builds
-                hasGooglePattern
-            } else {
-                Log.d(TAG, "No signatures found")
-                false
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Error checking signature characteristics", e)
-            false
-        }
-    }
+
     
     /**
      * Check if app was installed via system methods (ADB, etc.)
@@ -259,6 +281,54 @@ class UpdateManager private constructor(private val context: Context) {
     }
     
     /**
+     * Force a fresh Google Play detection (ignores cache)
+     * Use this when you suspect the cached result is incorrect
+     * @return true if detected as Google Play, false otherwise
+     */
+    fun forceFreshGooglePlayDetection(): Boolean {
+        Log.i(TAG, "Forcing fresh Google Play detection...")
+        InAppLogger.logSystemEvent("Forcing fresh Google Play detection", "UpdateManager")
+        
+        // Clear the cache first
+        resetGooglePlayDetectionCache()
+        
+        // Perform fresh detection
+        return isInstalledFromGooglePlay()
+    }
+    
+    /**
+     * Manually override Google Play detection result
+     * Use this only in edge cases where automatic detection is incorrect
+     * @param isGooglePlay The manual detection result
+     */
+    fun manuallyOverrideGooglePlayDetection(isGooglePlay: Boolean) {
+        Log.w(TAG, "Manual override of Google Play detection: $isGooglePlay")
+        InAppLogger.logSystemEvent("Manual override of Google Play detection: $isGooglePlay", "UpdateManager")
+        
+        cacheGooglePlayDetection(isGooglePlay)
+    }
+    
+    /**
+     * Get the current detection confidence level
+     * @return Confidence level as a percentage (0-100)
+     */
+    fun getDetectionConfidence(): Int {
+        try {
+            val installerPackage = getInstallerPackageName()
+            
+            // With simple installer package detection, confidence is high if we have a clear result
+            return when {
+                installerPackage == GOOGLE_PLAY_STORE_PACKAGE -> 100  // Definitely Google Play
+                installerPackage == null || installerPackage.isEmpty() -> 90  // Likely sideloaded
+                else -> 95  // Non-Google Play installer
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error calculating detection confidence", e)
+            return 0
+        }
+    }
+    
+    /**
      * Get detailed installation source information for debugging
      * @return Map containing all detection details
      */
@@ -271,13 +341,17 @@ class UpdateManager private constructor(private val context: Context) {
             details["installer_package"] = getInstallerPackageName() ?: "null"
             details["google_play_installed"] = isGooglePlayStoreInstalled()
             details["system_installed"] = isSystemInstalled()
-            details["signature_characteristics"] = hasGooglePlaySignatureCharacteristics()
             
             // Get current app version for context
             details["current_version"] = getCurrentVersion()
             
+            // Add simple detection info
+            details["detection_method"] = "installer_package_only"
+            details["google_play_package"] = GOOGLE_PLAY_STORE_PACKAGE
+            
             // Add debug info about the detection process
             details["debug_info"] = "Use resetGooglePlayDetectionCache() to clear cached result and re-detect"
+            details["force_fresh_detection"] = "Use forceFreshGooglePlayDetection() to ignore cache and re-detect"
             
         } catch (e: Exception) {
             details["error"] = e.message ?: "Unknown error"
@@ -286,6 +360,8 @@ class UpdateManager private constructor(private val context: Context) {
         return details
     }
     
+
+    
     /**
      * Debug method to log all installation source details
      * Call this to understand why the detection is working as it is
@@ -293,10 +369,13 @@ class UpdateManager private constructor(private val context: Context) {
     fun logInstallationSourceDetails() {
         val details = getInstallationSourceDetails()
         Log.i(TAG, "=== INSTALLATION SOURCE DEBUG INFO ===")
+        InAppLogger.logSystemEvent("=== INSTALLATION SOURCE DEBUG INFO ===", "UpdateManager")
         details.forEach { (key, value) ->
             Log.i(TAG, "$key: $value")
+            InAppLogger.logSystemEvent("$key: $value", "UpdateManager")
         }
         Log.i(TAG, "=======================================")
+        InAppLogger.logSystemEvent("=======================================", "UpdateManager")
     }
     
     /**
@@ -482,10 +561,24 @@ class UpdateManager private constructor(private val context: Context) {
     
     /**
      * Get current app version from package manager
+     * Strips any suffixes for clean version comparison
      */
     private fun getCurrentVersion(): String {
         val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-        return packageInfo.versionName ?: "1.0.0"
+        val fullVersionName = packageInfo.versionName ?: "1.0.0"
+        
+        // Strip any suffixes (like "-github", "-store") for clean version comparison
+        // This ensures backwards compatibility with existing users
+        return stripVersionSuffix(fullVersionName)
+    }
+    
+    /**
+     * Strip version suffixes for clean comparison
+     * Handles suffixes like "-github", "-store", etc.
+     */
+    private fun stripVersionSuffix(versionName: String): String {
+        // Remove common suffixes that might exist in older versions
+        return versionName.replace(Regex("-[a-zA-Z]+$"), "")
     }
     
     /**
@@ -511,7 +604,11 @@ class UpdateManager private constructor(private val context: Context) {
         val tagName = json.getString("tag_name")
         val versionName = tagName.removePrefix("v") // Remove "v" prefix if present
         
+        // Ensure clean version name for comparison
+        val cleanVersionName = stripVersionSuffix(versionName)
+        
         // Find APK asset in the release
+        // IMPORTANT: Filter out "NoUpdate" APKs to ensure GitHub users only get the auto-update version
         val assets = json.getJSONArray("assets")
         var downloadUrl = ""
         var fileSize = 0L
@@ -519,9 +616,17 @@ class UpdateManager private constructor(private val context: Context) {
         for (i in 0 until assets.length()) {
             val asset = assets.getJSONObject(i)
             val name = asset.getString("name")
+            
+            // Skip APKs with "NoUpdate" in the filename (these are for stores)
+            if (name.contains("NoUpdate", ignoreCase = true)) {
+                Log.d(TAG, "Skipping NoUpdate APK: $name")
+                continue
+            }
+            
             if (name.endsWith(".apk")) {
                 downloadUrl = asset.getString("browser_download_url")
                 fileSize = asset.getLong("size")
+                Log.d(TAG, "Found suitable APK for GitHub users: $name")
                 break
             }
         }
@@ -532,8 +637,8 @@ class UpdateManager private constructor(private val context: Context) {
         }
         
         return UpdateInfo(
-            versionName = versionName,
-            versionCode = extractVersionCode(versionName),
+            versionName = cleanVersionName, // Use clean version name for comparison
+            versionCode = extractVersionCode(cleanVersionName),
             downloadUrl = downloadUrl,
             fileSize = fileSize,
             releaseNotes = json.optString("body", ""),
@@ -577,10 +682,12 @@ class UpdateManager private constructor(private val context: Context) {
      * Get current app's signature hash for verification
      */
     private fun getCurrentAppSignature(): String {
+        @Suppress("DEPRECATION")
         val packageInfo = context.packageManager.getPackageInfo(
             context.packageName,
             PackageManager.GET_SIGNATURES
         )
+        @Suppress("DEPRECATION")
         val signatures = packageInfo.signatures
         if (signatures != null && signatures.isNotEmpty()) {
             val signature = signatures[0]
@@ -595,10 +702,12 @@ class UpdateManager private constructor(private val context: Context) {
      * Get APK file's signature hash for verification
      */
     private fun getApkSignature(apkFile: File): String {
+        @Suppress("DEPRECATION")
         val packageInfo = context.packageManager.getPackageArchiveInfo(
             apkFile.absolutePath,
             PackageManager.GET_SIGNATURES
         )
+        @Suppress("DEPRECATION")
         val signatures = packageInfo?.signatures
         if (signatures != null && signatures.isNotEmpty()) {
             val signature = signatures[0]
@@ -608,6 +717,8 @@ class UpdateManager private constructor(private val context: Context) {
         }
         return ""
     }
+    
+
     
     /**
      * Data class containing update information

@@ -58,7 +58,10 @@
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Search for an app..."
+                android:hint="@string/hint_search_for_app"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="@color/white_100"
+                app:hintTextColor="@color/purple_card_text_secondary"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
 
                 <AutoCompleteTextView
@@ -71,22 +74,33 @@
                     android:paddingStart="16dp"
                     android:paddingEnd="16dp"
                     android:paddingTop="16dp"
-                    android:paddingBottom="16dp" />
+                    android:paddingBottom="16dp"
+                    android:textColor="@color/purple_card_text_primary"
+                    android:textColorHint="@color/purple_card_text_secondary" />
 
             </com.google.android.material.textfield.TextInputLayout>
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/buttonAddApp"
+            <FrameLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
                 android:layout_marginTop="12dp"
-                android:text="Add App"
-                android:textSize="14sp"
-                app:cornerRadius="20dp"
-                android:paddingHorizontal="20dp"
-                android:paddingVertical="8dp"
-                android:textColor="@color/text_primary" />
+                android:background="@drawable/gradient_card_subtle_right">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/buttonAddApp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/item_onboarding_add_app"
+                    android:textSize="14sp"
+                    android:background="@android:color/transparent"
+                    android:textColor="@color/white_100"
+                    app:cornerRadius="20dp"
+                    android:paddingHorizontal="20dp"
+                    android:paddingVertical="8dp"
+                    style="@style/Widget.Material3.Button.TextButton" />
+
+            </FrameLayout>
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/recyclerSelectedApps"
@@ -111,7 +125,10 @@
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="Enter a word to block..."
+                android:hint="@string/hint_enter_word_to_block"
+                app:boxBackgroundMode="outline"
+                app:boxStrokeColor="@color/white_100"
+                app:hintTextColor="@color/purple_card_text_secondary"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
 
                 <com.google.android.material.textfield.TextInputEditText
@@ -124,22 +141,33 @@
                     android:paddingStart="16dp"
                     android:paddingEnd="16dp"
                     android:paddingTop="16dp"
-                    android:paddingBottom="16dp" />
+                    android:paddingBottom="16dp"
+                    android:textColor="@color/purple_card_text_primary"
+                    android:textColorHint="@color/purple_card_text_secondary" />
 
             </com.google.android.material.textfield.TextInputLayout>
 
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/buttonAddWord"
+            <FrameLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
                 android:layout_marginTop="12dp"
-                android:text="Add Word"
-                android:textSize="14sp"
-                app:cornerRadius="20dp"
-                android:paddingHorizontal="20dp"
-                android:paddingVertical="8dp"
-                android:textColor="@color/text_primary" />
+                android:background="@drawable/gradient_card_subtle_right">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/buttonAddWord"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/item_onboarding_add_word"
+                    android:textSize="14sp"
+                    android:background="@android:color/transparent"
+                    android:textColor="@color/white_100"
+                    app:cornerRadius="20dp"
+                    android:paddingHorizontal="20dp"
+                    android:paddingVertical="8dp"
+                    style="@style/Widget.Material3.Button.TextButton" />
+
+            </FrameLayout>
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/recyclerSelectedWords"
@@ -152,19 +180,202 @@
 
         </LinearLayout>
 
+        <!-- Rule Templates Section (optional) -->
+        <LinearLayout
+            android:id="@+id/ruleTemplatesSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="16dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                                    android:text="@string/item_onboarding_choose_template"
+                android:textSize="16sp"
+                android:textColor="@color/text_primary"
+                android:gravity="center"
+                android:layout_marginBottom="16dp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recyclerRuleTemplates"
+                android:layout_width="match_parent"
+                android:layout_height="400dp"
+                android:nestedScrollingEnabled="true"
+                android:scrollbars="vertical"
+                android:fadeScrollbars="false" />
+
+        </LinearLayout>
+
+        <!-- Language Selector Section (optional) -->
+        <LinearLayout
+            android:id="@+id/languageSelectorSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="16dp"
+            android:visibility="gone">
+
+            <!-- Language Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="4dp"
+                app:cardBackgroundColor="@android:color/transparent"
+                app:strokeWidth="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp"
+                    android:background="@drawable/gradient_card_subtle_right">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/onboarding_language_section_title"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/purple_card_text_primary"
+                        android:layout_marginBottom="12dp" />
+
+                    <Spinner
+                        android:id="@+id/languagePresetSpinner"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:minHeight="56dp"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:paddingTop="16dp"
+                        android:paddingBottom="16dp"
+                        android:background="@drawable/dropdown_background"
+                        android:popupBackground="@drawable/dropdown_background" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/onboarding_language_help_title"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/purple_card_text_primary"
+                        android:layout_marginTop="16dp"
+                        android:layout_marginBottom="8dp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/onboarding_language_help_description"
+                        android:textSize="12sp"
+                        android:textColor="@color/purple_card_text_secondary"
+                        android:lineSpacingExtra="2dp" />
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+        </LinearLayout>
+
+        <!-- Theme Selector Section (optional) -->
+        <LinearLayout
+            android:id="@+id/themeSelectorSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="16dp"
+            android:visibility="gone">
+
+            <!-- Theme Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="4dp"
+                app:cardBackgroundColor="@android:color/transparent"
+                app:strokeWidth="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp"
+                    android:background="@drawable/gradient_card_subtle_right">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/onboarding_theme_section_title"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/purple_card_text_primary"
+                        android:layout_marginBottom="12dp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingVertical="12dp">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/onboarding_theme_description"
+                                android:textSize="16sp"
+                                android:textColor="@color/purple_card_text_primary" />
+
+                        </LinearLayout>
+
+                        <com.google.android.material.materialswitch.MaterialSwitch
+                            android:id="@+id/themeSwitch"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:thumbTint="@color/switch_thumb_color"
+                            android:trackTint="@color/switch_track_color"
+                            app:thumbTint="@color/switch_thumb_color"
+                            app:trackTint="@color/switch_track_color"
+                            android:paddingLeft="12dp"/>
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+        </LinearLayout>
+
         <!-- Permission Button (optional) -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/buttonPermission"
+        <FrameLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:text="Open Notification Settings"
-            android:textSize="16sp"
-            app:cornerRadius="24dp"
-            android:paddingHorizontal="24dp"
-            android:paddingVertical="12dp"
-            android:visibility="gone"
-            android:textColor="@color/text_primary" />
+            android:background="@drawable/gradient_card_subtle_right">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonPermission"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                                    android:text="@string/item_onboarding_notification_settings"
+                android:textSize="16sp"
+                android:background="@android:color/transparent"
+                android:textColor="@color/white_100"
+                app:cornerRadius="24dp"
+                android:paddingHorizontal="24dp"
+                android:paddingVertical="12dp"
+                android:visibility="gone"
+                style="@style/Widget.Material3.Button.TextButton" />
+
+        </FrameLayout>
 
     </LinearLayout>
 </ScrollView> 

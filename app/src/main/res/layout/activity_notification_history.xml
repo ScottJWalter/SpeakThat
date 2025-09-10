@@ -38,45 +38,21 @@
                     android:padding="20dp">
 
                     <!-- Header -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
+                    <TextView
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:layout_marginBottom="16dp">
-
-                        <LinearLayout
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
-                            android:background="@drawable/circle_background"
-                            android:backgroundTint="@color/purple_300"
-                            android:gravity="center">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="📜"
-                                android:textSize="20sp" />
-
-                        </LinearLayout>
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Recent Notifications"
-                            android:textSize="18sp"
-                            android:textStyle="bold"
-                            android:textColor="?android:attr/textColorPrimary"
-                            android:layout_marginStart="12dp" />
-
-                    </LinearLayout>
+                        android:layout_marginBottom="16dp"
+                        android:text="@string/notification_history_recent"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:textColor="?android:attr/textColorPrimary" />
 
                     <!-- History Content -->
                     <TextView
                         android:id="@+id/textHistory"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="Loading notification history..."
+                        android:text="@string/notification_history_loading"
                         android:textSize="14sp"
                         android:textColor="?android:attr/textColorSecondary"
                         android:lineSpacingExtra="4dp"
@@ -105,35 +81,27 @@
 
                     <!-- Info Header -->
                     <LinearLayout
-                        android:layout_width="match_parent"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
                         android:gravity="center_vertical"
                         android:layout_marginBottom="12dp">
 
-                        <LinearLayout
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
-                            android:background="@drawable/circle_background"
-                            android:backgroundTint="@color/purple_300"
-                            android:gravity="center">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="ℹ️"
-                                android:textSize="20sp" />
-
-                        </LinearLayout>
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:src="@drawable/help_24px"
+                            android:contentDescription="Help"
+                            android:layout_marginEnd="8dp"
+                            app:tint="?android:attr/textColorPrimary" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Debug Information"
+                            android:text="@string/notification_history_debug_info"
                             android:textSize="18sp"
                             android:textStyle="bold"
-                            android:textColor="?android:attr/textColorPrimary"
-                            android:layout_marginStart="12dp" />
+                            android:textColor="?android:attr/textColorPrimary" />
 
                     </LinearLayout>
 
@@ -141,7 +109,7 @@
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="This screen shows notifications that SpeakThat! has captured for debugging purposes. It helps you verify that the app is working correctly and see exactly what notifications are being read aloud."
+                        android:text="@string/notification_history_debug_description"
                         android:textSize="14sp"
                         android:textColor="?android:attr/textColorSecondary"
                         android:lineSpacingExtra="4dp" />

@@ -28,47 +28,39 @@
                 android:layout_marginBottom="16dp"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="4dp"
-                app:cardBackgroundColor="?attr/colorSurface"
-                app:strokeColor="@color/purple_300"
-                app:strokeWidth="1dp">
+                app:cardBackgroundColor="@android:color/transparent"
+                app:strokeWidth="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:padding="20dp">
+                    android:padding="20dp"
+                    android:background="@drawable/gradient_card_subtle_right">
 
-                    <!-- Theme Section Header -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
                         android:gravity="center_vertical"
-                        android:layout_marginBottom="16dp">
+                        android:layout_marginBottom="12dp">
 
-                        <LinearLayout
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
-                            android:background="@drawable/circle_background"
-                            android:backgroundTint="@color/purple_300"
-                            android:gravity="center">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="🎨"
-                                android:textSize="20sp" />
-
-                        </LinearLayout>
+                        <ImageView
+                            android:id="@+id/iconTheme"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_marginEnd="16dp"
+                            android:src="@drawable/ic_dark_mode_24"
+                            android:tint="@color/white_100"
+                            android:contentDescription="@string/general_theme_title" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Theme"
-                            android:textSize="18sp"
+                            android:text="@string/general_theme_title"
+                            android:textSize="20sp"
                             android:textStyle="bold"
-                            android:textColor="@color/text_primary"
-                            android:layout_marginStart="12dp" />
+                            android:textColor="@color/purple_card_text_primary" />
 
                     </LinearLayout>
 
@@ -89,29 +81,30 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Dark Mode"
+                                android:text="@string/general_dark_mode"
                                 android:textSize="16sp"
                                 android:textStyle="bold"
-                                android:textColor="@color/text_primary" />
+                                android:textColor="@color/purple_card_text_primary" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Enable dark mode for this app"
+                                android:text="@string/general_dark_mode_description"
                                 android:textSize="14sp"
-                                android:textColor="@color/text_secondary"
+                                android:textColor="@color/purple_card_text_secondary"
                                 android:layout_marginTop="4dp" />
 
                         </LinearLayout>
 
-                        <com.google.android.material.switchmaterial.SwitchMaterial
+                        <com.google.android.material.materialswitch.MaterialSwitch
                             android:id="@+id/switchDarkMode"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:checked="true"
-                            app:thumbTint="@color/white_100"
-                            app:trackTint="@color/purple_200"
-                            app:trackTintMode="src_atop" />
+                            android:thumbTint="@color/switch_thumb_color"
+                            android:trackTint="@color/switch_track_color"
+                            app:thumbTint="@color/switch_thumb_color"
+                            app:trackTint="@color/switch_track_color" />
 
                     </LinearLayout>
 
@@ -126,47 +119,39 @@
                 android:layout_marginBottom="16dp"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="4dp"
-                app:cardBackgroundColor="?attr/colorSurface"
-                app:strokeColor="@color/purple_300"
-                app:strokeWidth="1dp">
+                app:cardBackgroundColor="@android:color/transparent"
+                app:strokeWidth="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:padding="20dp">
+                    android:padding="20dp"
+                    android:background="@drawable/gradient_card_subtle_right">
 
-                    <!-- App Preferences Header -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
                         android:gravity="center_vertical"
-                        android:layout_marginBottom="16dp">
+                        android:layout_marginBottom="12dp">
 
-                        <LinearLayout
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
-                            android:background="@drawable/circle_background"
-                            android:backgroundTint="@color/purple_300"
-                            android:gravity="center">
+                        <ImageView
+                            android:id="@+id/iconAppBehavior"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_marginEnd="16dp"
+                            android:src="@drawable/ic_mobile_gear_24"
+                            android:tint="@color/white_100"
+                            android:contentDescription="@string/general_app_behavior_title" />
 
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="⚙️"
-                                android:textSize="20sp" />
-
-                        </LinearLayout>
-
-                                                    <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="App Behavior &amp; Performance"
-                                android:textSize="18sp"
-                                android:textStyle="bold"
-                                android:textColor="@color/text_primary"
-                                android:layout_marginStart="12dp" />
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/general_app_behavior_title"
+                            android:textSize="20sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/purple_card_text_primary" />
 
                     </LinearLayout>
 
@@ -187,28 +172,30 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Auto-start on Boot"
+                                android:text="@string/general_auto_start"
                                 android:textSize="16sp"
                                 android:textStyle="bold"
-                                android:textColor="@color/text_primary" />
+                                android:textColor="@color/purple_card_text_primary" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Automatically start the notification service when device boots"
+                                android:text="@string/general_auto_start_description"
                                 android:textSize="14sp"
-                                android:textColor="@color/text_secondary"
+                                android:textColor="@color/purple_card_text_secondary"
                                 android:layout_marginTop="4dp" />
 
                         </LinearLayout>
 
-                        <com.google.android.material.switchmaterial.SwitchMaterial
+                        <com.google.android.material.materialswitch.MaterialSwitch
                             android:id="@+id/switchAutoStart"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            app:thumbTint="@color/white_100"
-                            app:trackTint="@color/purple_200"
-                            app:trackTintMode="src_atop" />
+                            android:thumbTint="@color/switch_thumb_color"
+                            android:trackTint="@color/switch_track_color"
+                            app:thumbTint="@color/switch_thumb_color"
+                            app:trackTint="@color/switch_track_color"
+                            android:paddingLeft="12dp"/>
 
                     </LinearLayout>
 
@@ -229,27 +216,31 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Battery Optimization Exemption"
+                                android:text="@string/general_battery_optimization"
                                 android:textSize="16sp"
                                 android:textStyle="bold"
-                                android:textColor="@color/text_primary" />
+                                android:textColor="@color/purple_card_text_primary" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Exclude app from battery optimization for better reliability"
-                                android:textAppearance="@style/TextAppearance.AppCompat.Body1"
+                                android:text="@string/general_battery_optimization_description"
+                                android:textSize="14sp"
+                                android:textColor="@color/purple_card_text_secondary"
+                                android:layout_marginTop="4dp"
                                 android:layout_marginBottom="8dp" />
 
                         </LinearLayout>
 
-                        <com.google.android.material.switchmaterial.SwitchMaterial
+                        <com.google.android.material.materialswitch.MaterialSwitch
                             android:id="@+id/switchBatteryOptimization"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            app:thumbTint="@color/white_100"
-                            app:trackTint="@color/purple_200"
-                            app:trackTintMode="src_atop" />
+                            android:thumbTint="@color/switch_thumb_color"
+                            android:trackTint="@color/switch_track_color"
+                            app:thumbTint="@color/switch_thumb_color"
+                            app:trackTint="@color/switch_track_color"
+                            android:paddingLeft="12dp"/>
 
                     </LinearLayout>
 
@@ -270,28 +261,30 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Aggressive Background Processing"
+                                android:text="@string/general_aggressive_background"
                                 android:textSize="16sp"
                                 android:textStyle="bold"
-                                android:textColor="@color/text_primary" />
+                                android:textColor="@color/purple_card_text_primary" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Process notifications more aggressively in background (uses more battery)"
+                                android:text="@string/general_aggressive_background_description"
                                 android:textSize="14sp"
-                                android:textColor="@color/text_secondary"
+                                android:textColor="@color/purple_card_text_secondary"
                                 android:layout_marginTop="4dp" />
 
                         </LinearLayout>
 
-                        <com.google.android.material.switchmaterial.SwitchMaterial
+                        <com.google.android.material.materialswitch.MaterialSwitch
                             android:id="@+id/switchAggressiveProcessing"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            app:thumbTint="@color/white_100"
-                            app:trackTint="@color/purple_200"
-                            app:trackTintMode="src_atop" />
+                            android:thumbTint="@color/switch_thumb_color"
+                            android:trackTint="@color/switch_track_color"
+                            app:thumbTint="@color/switch_thumb_color"
+                            app:trackTint="@color/switch_track_color"
+                            android:paddingLeft="12dp"/>
 
                     </LinearLayout>
 
@@ -305,18 +298,18 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Service Restart Policy"
+                            android:text="@string/general_service_restart_policy"
                             android:textSize="16sp"
                             android:textStyle="bold"
-                            android:textColor="@color/text_primary"
+                            android:textColor="@color/purple_card_text_primary"
                             android:layout_marginBottom="8dp" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="When should the notification service automatically restart?"
+                            android:text="@string/general_service_restart_description"
                             android:textSize="14sp"
-                            android:textColor="@color/text_secondary"
+                            android:textColor="@color/purple_card_text_secondary"
                             android:layout_marginBottom="12dp" />
 
                         <RadioGroup
@@ -329,27 +322,33 @@
                                 android:id="@+id/radioRestartNever"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="Never restart automatically"
+                                android:text="@string/general_never_restart"
                                 android:textSize="14sp"
-                                android:textColor="@color/text_primary"
+                                android:textColor="@color/purple_card_text_primary"
+                                android:buttonTint="@color/radio_button_color"
+                                app:buttonTint="@color/radio_button_color"
                                 android:paddingVertical="4dp" />
 
                             <RadioButton
                                 android:id="@+id/radioRestartOnCrash"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="Restart only on crash"
+                                android:text="@string/general_restart_on_crash"
                                 android:textSize="14sp"
-                                android:textColor="@color/text_primary"
+                                android:textColor="@color/purple_card_text_primary"
+                                android:buttonTint="@color/radio_button_color"
+                                app:buttonTint="@color/radio_button_color"
                                 android:paddingVertical="4dp" />
 
                             <RadioButton
                                 android:id="@+id/radioRestartPeriodic"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:text="Restart periodically (every 6 hours)"
+                                android:text="@string/general_restart_periodically"
                                 android:textSize="14sp"
-                                android:textColor="@color/text_primary"
+                                android:textColor="@color/purple_card_text_primary"
+                                android:buttonTint="@color/radio_button_color"
+                                app:buttonTint="@color/radio_button_color"
                                 android:paddingVertical="4dp" />
 
                         </RadioGroup>
@@ -360,58 +359,50 @@
 
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Update Settings Card -->
+            <!-- Notification Settings Card -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="4dp"
-                app:cardBackgroundColor="?attr/colorSurface"
-                app:strokeColor="@color/purple_300"
-                app:strokeWidth="1dp">
+                app:cardBackgroundColor="@android:color/transparent"
+                app:strokeWidth="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:padding="20dp">
+                    android:padding="20dp"
+                    android:background="@drawable/gradient_card_subtle_right">
 
-                    <!-- Update Settings Header -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
                         android:gravity="center_vertical"
-                        android:layout_marginBottom="16dp">
+                        android:layout_marginBottom="12dp">
 
-                        <LinearLayout
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
-                            android:background="@drawable/circle_background"
-                            android:backgroundTint="@color/purple_300"
-                            android:gravity="center">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="🔄"
-                                android:textSize="20sp" />
-
-                        </LinearLayout>
+                        <ImageView
+                            android:id="@+id/iconNotificationSettings"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_marginEnd="16dp"
+                            android:src="@drawable/ic_notification_add_24"
+                            android:tint="@color/white_100"
+                            android:contentDescription="@string/general_notification_settings_title" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Auto-Update Settings"
-                            android:textSize="18sp"
+                            android:text="@string/general_notification_settings_title"
+                            android:textSize="20sp"
                             android:textStyle="bold"
-                            android:textColor="@color/text_primary"
-                            android:layout_marginStart="12dp" />
+                            android:textColor="@color/purple_card_text_primary" />
 
                     </LinearLayout>
 
-                    <!-- Auto-Update Toggle -->
+                    <!-- @string/general_persistent_notification -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -428,98 +419,74 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Check for Updates"
+                                android:text="@string/general_persistent_notification"
                                 android:textSize="16sp"
                                 android:textStyle="bold"
-                                android:textColor="@color/text_primary" />
+                                android:textColor="@color/purple_card_text_primary" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Automatically check for app updates when you open the app"
+                                android:text="@string/general_persistent_notification_description"
                                 android:textSize="14sp"
-                                android:textColor="@color/text_secondary"
+                                android:textColor="@color/purple_card_text_secondary"
                                 android:layout_marginTop="4dp" />
 
                         </LinearLayout>
 
-                        <com.google.android.material.switchmaterial.SwitchMaterial
-                            android:id="@+id/switchAutoUpdate"
+                        <com.google.android.material.materialswitch.MaterialSwitch
+                            android:id="@+id/switchPersistentNotification"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            app:thumbTint="@color/white_100"
-                            app:trackTint="@color/purple_200"
-                            app:trackTintMode="src_atop" />
+                            android:thumbTint="@color/switch_thumb_color"
+                            android:trackTint="@color/switch_track_color"
+                            app:thumbTint="@color/switch_thumb_color"
+                            app:trackTint="@color/switch_track_color"
+                            android:paddingLeft="12dp"/>
 
                     </LinearLayout>
 
-                    <!-- Update Check Frequency -->
+                    <!-- Notification While Reading -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="vertical"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
                         android:paddingVertical="12dp">
 
-                        <TextView
-                            android:layout_width="wrap_content"
+                        <LinearLayout
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:text="Check Frequency"
-                            android:textSize="16sp"
-                            android:textStyle="bold"
-                            android:textColor="@color/text_primary"
-                            android:layout_marginBottom="8dp" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="How often should the app check for updates?"
-                            android:textSize="14sp"
-                            android:textColor="@color/text_secondary"
-                            android:layout_marginBottom="12dp" />
-
-                        <RadioGroup
-                            android:id="@+id/radioGroupUpdateFrequency"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
                             android:orientation="vertical">
 
-                            <RadioButton
-                                android:id="@+id/radioUpdateDaily"
-                                android:layout_width="match_parent"
+                            <TextView
+                                android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Daily"
-                                android:textSize="14sp"
-                                android:textColor="@color/text_primary"
-                                android:paddingVertical="4dp" />
+                                android:text="@string/general_notification_while_reading"
+                                android:textSize="16sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/purple_card_text_primary" />
 
-                            <RadioButton
-                                android:id="@+id/radioUpdateWeekly"
-                                android:layout_width="match_parent"
+                            <TextView
+                                android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Weekly"
+                                android:text="@string/general_notification_while_reading_description"
                                 android:textSize="14sp"
-                                android:textColor="@color/text_primary"
-                                android:paddingVertical="4dp" />
+                                android:textColor="@color/purple_card_text_secondary"
+                                android:layout_marginTop="4dp" />
 
-                            <RadioButton
-                                android:id="@+id/radioUpdateMonthly"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:text="Monthly"
-                                android:textSize="14sp"
-                                android:textColor="@color/text_primary"
-                                android:paddingVertical="4dp" />
+                        </LinearLayout>
 
-                            <RadioButton
-                                android:id="@+id/radioUpdateNever"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:text="Never (manual only)"
-                                android:textSize="14sp"
-                                android:textColor="@color/text_primary"
-                                android:paddingVertical="4dp" />
-
-                        </RadioGroup>
+                        <com.google.android.material.materialswitch.MaterialSwitch
+                            android:id="@+id/switchNotificationWhileReading"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:thumbTint="@color/switch_thumb_color"
+                            android:trackTint="@color/switch_track_color"
+                            app:thumbTint="@color/switch_thumb_color"
+                            app:trackTint="@color/switch_track_color"
+                            android:paddingLeft="12dp"/>
 
                     </LinearLayout>
 
@@ -534,47 +501,39 @@
                 android:layout_marginBottom="16dp"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="4dp"
-                app:cardBackgroundColor="?attr/colorSurface"
-                app:strokeColor="@color/purple_300"
-                app:strokeWidth="1dp">
+                app:cardBackgroundColor="@android:color/transparent"
+                app:strokeWidth="0dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:padding="20dp">
+                    android:padding="20dp"
+                    android:background="@drawable/gradient_card_subtle_right">
 
-                    <!-- Data Management Header -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
                         android:gravity="center_vertical"
-                        android:layout_marginBottom="16dp">
+                        android:layout_marginBottom="12dp">
 
-                        <LinearLayout
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
-                            android:background="@drawable/circle_background"
-                            android:backgroundTint="@color/purple_300"
-                            android:gravity="center">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="💾"
-                                android:textSize="20sp" />
-
-                        </LinearLayout>
+                        <ImageView
+                            android:id="@+id/iconDataManagement"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_marginEnd="16dp"
+                            android:src="@drawable/ic_settings_backup_restore_24"
+                            android:tint="@color/white_100"
+                            android:contentDescription="@string/general_data_management_title" />
 
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="Data Management"
-                            android:textSize="18sp"
+                            android:text="@string/general_data_management_title"
+                            android:textSize="20sp"
                             android:textStyle="bold"
-                            android:textColor="@color/text_primary"
-                            android:layout_marginStart="12dp" />
+                            android:textColor="@color/purple_card_text_primary" />
 
                     </LinearLayout>
 
@@ -599,17 +558,17 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Export Full Configuration"
+                                android:text="@string/export_full_config_chooser"
                                 android:textSize="16sp"
                                 android:textStyle="bold"
-                                android:textColor="@color/text_primary" />
+                                android:textColor="@color/purple_card_text_primary" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Backup all settings including filters, voice, and behavior"
+                                android:text="@string/general_export_configuration_description"
                                 android:textSize="14sp"
-                                android:textColor="@color/text_secondary"
+                                android:textColor="@color/purple_card_text_secondary"
                                 android:layout_marginTop="4dp" />
 
                         </LinearLayout>
@@ -617,9 +576,9 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="›"
+                            android:text="@string/arrow_right"
                             android:textSize="24sp"
-                            android:textColor="@color/purple_200" />
+                            android:textColor="@color/white_100" />
 
                     </LinearLayout>
 
@@ -644,17 +603,17 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Import Full Configuration"
+                                android:text="@string/dialog_title_import_full_config"
                                 android:textSize="16sp"
                                 android:textStyle="bold"
-                                android:textColor="@color/text_primary" />
+                                android:textColor="@color/purple_card_text_primary" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Restore all settings from a backup file"
+                                android:text="@string/general_import_configuration_description"
                                 android:textSize="14sp"
-                                android:textColor="@color/text_secondary"
+                                android:textColor="@color/purple_card_text_secondary"
                                 android:layout_marginTop="4dp" />
 
                         </LinearLayout>
@@ -662,13 +621,13 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="›"
+                            android:text="@string/arrow_right"
                             android:textSize="24sp"
-                            android:textColor="@color/purple_200" />
+                            android:textColor="@color/white_100" />
 
                     </LinearLayout>
 
-                    <!-- Clear All Data -->
+                    <!-- @string/button_clear_all_data -->
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -689,17 +648,17 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Clear All Data"
+                                android:text="@string/button_clear_all_data"
                                 android:textSize="16sp"
                                 android:textStyle="bold"
-                                android:textColor="@color/text_primary" />
+                                android:textColor="@color/purple_card_text_primary" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Reset all settings and clear notification history"
+                                android:text="@string/general_reset_settings"
                                 android:textSize="14sp"
-                                android:textColor="@color/text_secondary"
+                                android:textColor="@color/purple_card_text_secondary"
                                 android:layout_marginTop="4dp" />
 
                         </LinearLayout>
@@ -707,9 +666,9 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="›"
+                            android:text="@string/arrow_right"
                             android:textSize="24sp"
-                            android:textColor="@color/purple_200" />
+                            android:textColor="@color/white_100" />
 
                     </LinearLayout>
 
@@ -717,105 +676,7 @@
 
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Test Settings Button (Development) -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="4dp"
-                app:cardBackgroundColor="?attr/colorSurface"
-                app:strokeColor="@color/purple_300"
-                app:strokeWidth="1dp">
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="20dp">
-
-                    <!-- Test Settings Header -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:layout_marginBottom="16dp">
-
-                        <LinearLayout
-                            android:layout_width="40dp"
-                            android:layout_height="40dp"
-                            android:background="@drawable/circle_background"
-                            android:backgroundTint="@color/purple_300"
-                            android:gravity="center">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="🧪"
-                                android:textSize="20sp" />
-
-                        </LinearLayout>
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Test Settings"
-                            android:textSize="18sp"
-                            android:textStyle="bold"
-                            android:textColor="@color/text_primary"
-                            android:layout_marginStart="12dp" />
-
-                    </LinearLayout>
-
-                    <!-- Test Settings Button -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:paddingVertical="12dp"
-                        android:background="?android:attr/selectableItemBackground"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:id="@+id/testSettingsButton">
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Verify All Settings"
-                                android:textSize="16sp"
-                                android:textStyle="bold"
-                                android:textColor="@color/text_primary" />
-
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Run comprehensive test to verify all settings are working"
-                                android:textSize="14sp"
-                                android:textColor="@color/text_secondary"
-                                android:layout_marginTop="4dp" />
-
-                        </LinearLayout>
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="›"
-                            android:textSize="24sp"
-                            android:textColor="@color/purple_200" />
-
-                    </LinearLayout>
-
-                </LinearLayout>
-
-            </com.google.android.material.card.MaterialCardView>
 
         </LinearLayout>
 

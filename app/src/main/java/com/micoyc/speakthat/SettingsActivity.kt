@@ -11,7 +11,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.google.android.material.switchmaterial.SwitchMaterial
+import com.google.android.material.materialswitch.MaterialSwitch
 import com.micoyc.speakthat.databinding.ActivitySettingsBinding
 
 class SettingsActivity : AppCompatActivity() {
@@ -23,6 +23,11 @@ class SettingsActivity : AppCompatActivity() {
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Apply saved theme FIRST before anything else
+        val mainPrefs = getSharedPreferences("SpeakThatPrefs", android.content.Context.MODE_PRIVATE)
+        applySavedTheme(mainPrefs)
+        
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
         
@@ -34,6 +39,17 @@ class SettingsActivity : AppCompatActivity() {
         setupSettingsCategories()
         setupAllSettings()
         setupClickListeners()
+        setupThemeIcon()
+    }
+
+    private fun applySavedTheme(prefs: android.content.SharedPreferences) {
+        val isDarkMode = prefs.getBoolean("dark_mode", false)
+        
+        if (isDarkMode) {
+            androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
+        } else {
+            androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO)
+        }
     }
     
     private fun setupToolbar() {
@@ -84,7 +100,6 @@ class SettingsActivity : AppCompatActivity() {
                 id = "general",
                 title = "General Settings",
                 description = "App preferences, theme settings",
-                icon = "⚙️",
                 cardView = binding.cardGeneralSettings,
                 onClickAction = { startActivity(Intent(this, GeneralSettingsActivity::class.java)) }
             ),
@@ -92,7 +107,6 @@ class SettingsActivity : AppCompatActivity() {
                 id = "behavior",
                 title = "Behavior Settings",
                 description = "When and how notifications are read",
-                icon = "🔔",
                 cardView = binding.cardBehaviorSettings,
                 onClickAction = { startActivity(Intent(this, BehaviorSettingsActivity::class.java)) }
             ),
@@ -100,7 +114,6 @@ class SettingsActivity : AppCompatActivity() {
                 id = "voice",
                 title = "Voice Settings",
                 description = "Text-to-speech voice and speed",
-                icon = "🎙️",
                 cardView = binding.cardVoiceSettings,
                 onClickAction = { startActivity(Intent(this, VoiceSettingsActivity::class.java)) }
             ),
@@ -108,15 +121,20 @@ class SettingsActivity : AppCompatActivity() {
                 id = "filter",
                 title = "Filter Settings",
                 description = "Choose which apps to read",
-                icon = "🔍",
                 cardView = binding.cardFilterSettings,
                 onClickAction = { startActivity(Intent(this, FilterSettingsActivity::class.java)) }
+            ),
+            SettingsCategory(
+                id = "conditional",
+                title = "Conditional Rules",
+                description = "Advanced rules for when notifications are read",
+                cardView = binding.cardConditionalRules,
+                onClickAction = { startActivity(Intent(this, RulesActivity::class.java)) }
             ),
             SettingsCategory(
                 id = "development",
                 title = "Development Settings",
                 description = "Debug tools and logging system",
-                icon = "🛠️",
                 cardView = binding.cardDevelopmentSettings,
                 onClickAction = { startActivity(Intent(this, DevelopmentSettingsActivity::class.java)) }
             ),
@@ -124,7 +142,6 @@ class SettingsActivity : AppCompatActivity() {
                 id = "onboarding",
                 title = "Re-run Onboarding",
                 description = "See the app introduction again",
-                icon = "🔄",
                 cardView = binding.cardReRunOnboarding,
                 onClickAction = { 
                     InAppLogger.logUserAction("Re-run onboarding selected")
@@ -135,7 +152,6 @@ class SettingsActivity : AppCompatActivity() {
                 id = "support",
                 title = "Support & Feedback",
                 description = "Get help, report bugs, request features",
-                icon = "💬",
                 cardView = binding.cardSupportFeedback,
                 onClickAction = { showSupportDialog() }
             )
@@ -197,12 +213,20 @@ class SettingsActivity : AppCompatActivity() {
             startActivity(Intent(this, FilterSettingsActivity::class.java))
         }
         
+        binding.cardConditionalRules.setOnClickListener {
+            startActivity(Intent(this, RulesActivity::class.java))
+        }
+        
         binding.cardDevelopmentSettings.setOnClickListener {
             startActivity(Intent(this, DevelopmentSettingsActivity::class.java))
         }
         
         binding.cardSupportFeedback.setOnClickListener {
             showSupportDialog()
+        }
+        
+        binding.cardDonate.setOnClickListener {
+            showDonateDialog()
         }
         
         binding.cardReRunOnboarding.setOnClickListener {
@@ -212,7 +236,12 @@ class SettingsActivity : AppCompatActivity() {
     }
     
     override fun onSupportNavigateUp(): Boolean {
-        onBackPressed()
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            onBackPressedDispatcher.onBackPressed()
+        } else {
+            @Suppress("DEPRECATION")
+            onBackPressed()
+        }
         return true
     }
     
@@ -220,6 +249,7 @@ class SettingsActivity : AppCompatActivity() {
         // Set up proper window insets handling for different Android versions
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             // For Android 11+ (API 30+), use the new window insets API
+            @Suppress("DEPRECATION")
             window.setDecorFitsSystemWindows(true)
         } else {
             // For older versions (Android 10 and below), ensure proper system UI flags
@@ -243,7 +273,7 @@ class SettingsActivity : AppCompatActivity() {
         val cardFeatureRequest = dialogView.findViewById<com.google.android.material.card.MaterialCardView>(R.id.cardFeatureRequest)
         val cardBugReport = dialogView.findViewById<com.google.android.material.card.MaterialCardView>(R.id.cardBugReport)
         val cardGeneralSupport = dialogView.findViewById<com.google.android.material.card.MaterialCardView>(R.id.cardGeneralSupport)
-        val switchIncludeLogs = dialogView.findViewById<SwitchMaterial>(R.id.switchIncludeLogs)
+        val switchIncludeLogs = dialogView.findViewById<MaterialSwitch>(R.id.switchIncludeLogs)
         val textLogInfo = dialogView.findViewById<android.widget.TextView>(R.id.textLogInfo)
         val btnCancel = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnCancel)
         
@@ -283,11 +313,11 @@ class SettingsActivity : AppCompatActivity() {
             }
             "bug_report" -> {
                 dialog.dismiss()
-                sendSupportEmail("Bug Report", false)
+                sendSupportEmail("Bug Report", true)
             }
             "general_support" -> {
                 dialog.dismiss()
-                sendSupportEmail("Support", false)
+                sendSupportEmail("Support", true)
             }
             else -> {
                 dialog.show()
@@ -298,43 +328,32 @@ class SettingsActivity : AppCompatActivity() {
     private fun sendSupportEmail(type: String, includeLogs: Boolean) {
         try {
             val subject = "SpeakThat! $type"
-            val recipient = "oceanstream72@gmail.com"
+            val recipient = "micoycbusiness@gmail.com"
             
             val bodyBuilder = StringBuilder()
-            bodyBuilder.append("Hello SpeakThat! Team,\n\n")
             
             when (type) {
                 "Feature Request" -> {
                     bodyBuilder.append("I would like to request the following feature:\n\n")
-                    bodyBuilder.append("[Please describe your feature request here]\n\n")
-                    bodyBuilder.append("Why would this feature be useful?\n")
-                    bodyBuilder.append("[Please explain the benefit or use case]\n\n")
+                    bodyBuilder.append("[Please explain your idea]\n\n\n\n")
                 }
                 "Bug Report" -> {
                     bodyBuilder.append("I encountered the following issue:\n\n")
-                    bodyBuilder.append("What happened?\n")
-                    bodyBuilder.append("[Please describe the problem]\n\n")
-                    bodyBuilder.append("What were you trying to do?\n")
-                    bodyBuilder.append("[Please describe the steps you took]\n\n")
-                    bodyBuilder.append("What did you expect to happen?\n")
-                    bodyBuilder.append("[Please describe the expected behavior]\n\n")
+                    bodyBuilder.append("[Please explain the issue]\n\n\n\n")
                 }
                 "Support" -> {
                     bodyBuilder.append("I need help with:\n\n")
-                    bodyBuilder.append("[Please describe your question or issue]\n\n")
+                    bodyBuilder.append("[Please explain what you need help with]\n\n\n\n")
                 }
             }
             
             if (includeLogs) {
                 bodyBuilder.append("=== DEBUG INFORMATION ===\n")
-                bodyBuilder.append(InAppLogger.getSystemInfo())
+                bodyBuilder.append(InAppLogger.getSystemInfo(this))
                 bodyBuilder.append("\n\n=== DEBUG LOGS ===\n")
                 bodyBuilder.append(InAppLogger.getLogsForSupport())
                 bodyBuilder.append("\n=== END DEBUG INFO ===\n\n")
             }
-            
-            bodyBuilder.append("Thank you for your time!\n")
-            bodyBuilder.append("- SpeakThat! User")
             
             val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
                 data = Uri.parse("mailto:")
@@ -361,6 +380,94 @@ class SettingsActivity : AppCompatActivity() {
             Toast.makeText(this, "Error opening email: ${e.message}", Toast.LENGTH_LONG).show()
             InAppLogger.logCrash(e, "Support email")
         }
+    }
+    
+    private fun showDonateDialog() {
+        InAppLogger.logUserAction("Donate dialog opened")
+        
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_donate, null)
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .create()
+        
+        // Get UI elements
+        val cardKoFi = dialogView.findViewById<com.google.android.material.card.MaterialCardView>(R.id.cardKoFi)
+        val cardPatreon = dialogView.findViewById<com.google.android.material.card.MaterialCardView>(R.id.cardPatreon)
+        val cardGitHub = dialogView.findViewById<com.google.android.material.card.MaterialCardView>(R.id.cardGitHub)
+        val cardBitcoin = dialogView.findViewById<com.google.android.material.card.MaterialCardView>(R.id.cardBitcoin)
+        val btnCancel = dialogView.findViewById<com.google.android.material.button.MaterialButton>(R.id.btnCancel)
+        
+        // Set up click listeners
+        cardKoFi.setOnClickListener {
+            InAppLogger.logUserAction("Ko-fi donation selected")
+            dialog.dismiss()
+            openUrl("https://ko-fi.com/mitchib1440")
+        }
+        
+        cardPatreon.setOnClickListener {
+            InAppLogger.logUserAction("Patreon donation selected")
+            dialog.dismiss()
+            openUrl("https://www.patreon.com/c/mitchib1440")
+        }
+        
+        cardGitHub.setOnClickListener {
+            InAppLogger.logUserAction("GitHub Sponsors donation selected")
+            dialog.dismiss()
+            openUrl("https://github.com/sponsors/mitchib1440")
+        }
+        
+        cardBitcoin.setOnClickListener {
+            InAppLogger.logUserAction("Bitcoin donation selected")
+            dialog.dismiss()
+            copyBitcoinAddress()
+        }
+        
+        btnCancel.setOnClickListener {
+            InAppLogger.logUserAction("Donate dialog cancelled")
+            dialog.dismiss()
+        }
+        
+        dialog.show()
+    }
+    
+    private fun openUrl(url: String) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            startActivity(intent)
+            InAppLogger.logUserAction("External link opened", "URL: $url")
+        } catch (e: Exception) {
+            Toast.makeText(this, "Unable to open link: ${e.message}", Toast.LENGTH_SHORT).show()
+            InAppLogger.logError("Donate", "Failed to open URL: ${e.message}")
+        }
+    }
+    
+    private fun copyBitcoinAddress() {
+        try {
+            val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val clip = android.content.ClipData.newPlainText("Bitcoin Address", "38ACvcbhsyaF5K4kRdxCFwPcKZNafUv8sq")
+            clipboard.setPrimaryClip(clip)
+            
+            Toast.makeText(this, "Bitcoin address copied to clipboard", Toast.LENGTH_LONG).show()
+            InAppLogger.logUserAction("Bitcoin address copied to clipboard")
+        } catch (e: Exception) {
+            Toast.makeText(this, "Failed to copy address: ${e.message}", Toast.LENGTH_SHORT).show()
+            InAppLogger.logError("Donate", "Failed to copy Bitcoin address: ${e.message}")
+        }
+    }
+    
+    private fun setupThemeIcon() {
+        // Set the appropriate icon for General Settings based on current theme
+        val isDarkMode = resources.configuration.uiMode and 
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK == 
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        
+        val iconRes = if (isDarkMode) {
+            R.drawable.ic_light_mode_24
+        } else {
+            R.drawable.ic_dark_mode_24
+        }
+        
+        binding.iconGeneralSettings.setImageResource(iconRes)
     }
     
 

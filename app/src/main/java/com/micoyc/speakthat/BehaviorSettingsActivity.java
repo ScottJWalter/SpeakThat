@@ -26,6 +26,7 @@ import com.google.android.material.button.MaterialButton;
 import com.google.android.material.dialog.MaterialAlertDialogBuilder;
 import com.google.android.material.slider.Slider;
 import com.micoyc.speakthat.databinding.ActivityBehaviorSettingsBinding;
+import com.micoyc.speakthat.InAppLogger;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -79,6 +80,11 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
     private static final String KEY_CUSTOM_APP_NAMES = "custom_app_names"; // JSON string of custom app names
     private static final String KEY_COOLDOWN_APPS = "cooldown_apps"; // JSON string of cooldown app settings
     private static final String KEY_HONOUR_DO_NOT_DISTURB = "honour_do_not_disturb"; // boolean
+    private static final String KEY_HONOUR_PHONE_CALLS = "honour_phone_calls"; // boolean
+    private static final String KEY_NOTIFICATION_DEDUPLICATION = "notification_deduplication"; // boolean
+    private static final String KEY_DISMISSAL_MEMORY_ENABLED = "dismissal_memory_enabled"; // boolean
+    private static final String KEY_DISMISSAL_MEMORY_TIMEOUT = "dismissal_memory_timeout"; // int (minutes)
+
     private static final String KEY_SPEECH_TEMPLATE = "speech_template"; // Custom speech template
 
     // Media behavior options
@@ -89,26 +95,32 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
 
     // Default values
     private static final String DEFAULT_NOTIFICATION_BEHAVIOR = "smart";
-    private static final String DEFAULT_MEDIA_BEHAVIOR = MEDIA_BEHAVIOR_DUCK;
+    private static final String DEFAULT_MEDIA_BEHAVIOR = MEDIA_BEHAVIOR_PAUSE;
     private static final int DEFAULT_DUCKING_VOLUME = 30; // 30% volume when ducking
     private static final int DEFAULT_DELAY_BEFORE_READOUT = 2; // 2 seconds
     private static final boolean DEFAULT_HONOUR_DO_NOT_DISTURB = true; // Default to honouring DND
+    private static final boolean DEFAULT_HONOUR_PHONE_CALLS = true; // Default to honouring phone calls
+    private static final boolean DEFAULT_NOTIFICATION_DEDUPLICATION = false; // Default to disabled
+    private static final boolean DEFAULT_DISMISSAL_MEMORY_ENABLED = true; // Default to enabled (most users benefit)
+    private static final int DEFAULT_DISMISSAL_MEMORY_TIMEOUT = 15; // Default to 15 minutes
+
 
     // Speech template constants
     private static final String DEFAULT_SPEECH_TEMPLATE = "{app} notified you: {content}";
     private static final String[] TEMPLATE_PRESETS = {
         "Default", "Minimal", "Formal", "Casual", "Time Aware", "Content Only", "App Only", "Varied", "Custom"
     };
-    private static final String[] TEMPLATE_VALUES = {
-        "{app} notified you: {content}",
-        "{app}: {content}",
-        "Notification from {app}: {content}",
-        "{app} says: {content}",
-        "{app} at {time}: {content}",
-        "{content}",
-        "{app}",
+    // Template keys that correspond to localized string resources
+    private static final String[] TEMPLATE_KEYS = {
+        "tts_format_default",
+        "tts_format_minimal", 
+        "tts_format_formal",
+        "tts_format_casual",
+        "tts_format_time_aware",
+        "tts_format_content_only",
+        "tts_format_app_only",
         "VARIED", // Special marker for varied mode
-        "" // Custom will be empty since it's user-defined
+        "CUSTOM" // Custom will be handled separately
     };
 
     // Varied format options for random selection
@@ -176,7 +188,7 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
         // Set up action bar
         if (getSupportActionBar() != null) {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-            getSupportActionBar().setTitle("Behavior Settings");
+            getSupportActionBar().setTitle(getString(R.string.title_behavior_settings));
         }
 
         // Initialize sensor manager
@@ -436,24 +448,38 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
             if (checkedId == R.id.radioMediaPause) {
                 mediaBehavior = MEDIA_BEHAVIOR_PAUSE;
             } else if (checkedId == R.id.radioMediaDuck) {
+                // Lower Audio is now always available - show enhanced warning
                 mediaBehavior = MEDIA_BEHAVIOR_DUCK;
             } else if (checkedId == R.id.radioMediaSilence) {
                 mediaBehavior = MEDIA_BEHAVIOR_SILENCE;
             }
             
-            // Show/hide ducking volume controls and warning
+            // Show/hide ducking volume controls and enhanced warning
             boolean showDucking = MEDIA_BEHAVIOR_DUCK.equals(mediaBehavior);
             binding.duckingVolumeContainer.setVisibility(showDucking ? View.VISIBLE : View.GONE);
             binding.duckingWarningText.setVisibility(showDucking ? View.VISIBLE : View.GONE);
             if (showDucking) {
-                binding.duckingWarningText.setText("⚠️ For best results, set the notification voice to use the Notification audio stream in Voice Settings. On some devices, lowering media volume may also lower the notification voice. If Duck Audio does not work as expected, try Notification audio.");
+                // Use the enhanced warning text from strings
+                binding.duckingWarningText.setText(getString(R.string.behavior_ducking_enhanced_warning) + "\n\n" +
+                        getString(R.string.behavior_ducking_device_tip) + "\n\n" +
+                        getString(R.string.behavior_ducking_fallback_tip));
             }
-            // Show/hide pause warning
-            boolean showPauseWarning = MEDIA_BEHAVIOR_PAUSE.equals(mediaBehavior);
-            binding.pauseWarningText.setVisibility(showPauseWarning ? View.VISIBLE : View.GONE);
             
             // Save setting
             saveMediaBehavior(mediaBehavior);
+        });
+
+
+
+
+
+        // Set up ducking fallback strategy radio buttons
+        binding.duckingFallbackGroup.setOnCheckedChangeListener((group, checkedId) -> {
+            String fallbackStrategy = "manual"; // default
+            if (checkedId == R.id.radioFallbackPause) {
+                fallbackStrategy = "pause";
+            }
+            saveDuckingFallbackStrategy(fallbackStrategy);
         });
 
         // Set up ducking volume slider
@@ -488,6 +514,56 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
             saveHonourDoNotDisturb(isChecked);
         });
         
+        // Set up Audio Mode toggle
+        binding.switchHonourAudioMode.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            saveHonourAudioMode(isChecked);
+        });
+        
+        // Set up Phone Calls toggle
+        binding.switchHonourPhoneCalls.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            saveHonourPhoneCalls(isChecked);
+        });
+        
+        // Set up Notification Deduplication toggle
+        binding.switchNotificationDeduplication.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            saveNotificationDeduplication(isChecked);
+        });
+        
+        // Set up Deduplication info button
+        binding.btnDeduplicationInfo.setOnClickListener(v -> showDeduplicationDialog());
+        
+        // Set up Dismissal Memory toggle
+        binding.switchDismissalMemory.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            saveDismissalMemoryEnabled(isChecked);
+            binding.dismissalMemorySettingsSection.setVisibility(isChecked ? View.VISIBLE : View.GONE);
+        });
+        
+        // Set up Dismissal Memory timeout radio buttons
+        binding.dismissalMemoryTimeoutGroup.setOnCheckedChangeListener((group, checkedId) -> {
+            int timeoutMinutes = DEFAULT_DISMISSAL_MEMORY_TIMEOUT; // default
+            if (checkedId == R.id.radioDismissalMemory5min) {
+                timeoutMinutes = 5;
+            } else if (checkedId == R.id.radioDismissalMemory15min) {
+                timeoutMinutes = 15;
+            } else if (checkedId == R.id.radioDismissalMemory30min) {
+                timeoutMinutes = 30;
+            } else if (checkedId == R.id.radioDismissalMemory1hour) {
+                timeoutMinutes = 60;
+            }
+            
+            // Save setting
+            saveDismissalMemoryTimeout(timeoutMinutes);
+        });
+        
+        // Set up Dismissal Memory info button
+        binding.btnDismissalMemoryInfo.setOnClickListener(v -> showDismissalMemoryDialog());
+        
+        // Set up Audio Mode info button
+        binding.btnAudioModeInfo.setOnClickListener(v -> showAudioModeDialog());
+        
+        // Set up Phone Calls info button
+        binding.btnPhoneCallsInfo.setOnClickListener(v -> showPhoneCallsDialog());
+        
         // Set up speech template functionality
         setupSpeechTemplateUI();
     }
@@ -504,9 +580,9 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
         binding.spinnerSpeechTemplate.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(android.widget.AdapterView<?> parent, android.view.View view, int position, long id) {
-                String selectedTemplate = TEMPLATE_VALUES[position];
+                String selectedTemplateKey = TEMPLATE_KEYS[position];
                 
-                if (selectedTemplate.equals("VARIED")) {
+                if (selectedTemplateKey.equals("VARIED")) {
                     // Hide custom input section for varied mode
                     binding.editCustomSpeechTemplate.setVisibility(View.GONE);
                     // Also hide the "Custom Format:" label by finding its parent container
@@ -515,20 +591,21 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
                     binding.textSpeechPreview.setText("Varied mode: Random format selected for each notification");
                     binding.textSpeechPreview.setTextColor(getResources().getColor(R.color.text_tertiary));
                     saveSpeechTemplate("VARIED");
-                } else if (selectedTemplate.isEmpty()) {
+                } else if (selectedTemplateKey.equals("CUSTOM")) {
                     // Custom mode - show input field
                     binding.editCustomSpeechTemplate.setVisibility(View.VISIBLE);
                     View customFormatContainer = (View) binding.editCustomSpeechTemplate.getParent().getParent();
                     customFormatContainer.setVisibility(View.VISIBLE);
                     updateSpeechPreview();
                 } else {
-                    // Regular preset - update input field and preview
+                    // Regular preset - get localized template and update input field and preview
+                    String localizedTemplate = getLocalizedTemplateValue(selectedTemplateKey);
                     binding.editCustomSpeechTemplate.setVisibility(View.VISIBLE);
                     View customFormatContainer = (View) binding.editCustomSpeechTemplate.getParent().getParent();
                     customFormatContainer.setVisibility(View.VISIBLE);
-                    binding.editCustomSpeechTemplate.setText(selectedTemplate);
+                    binding.editCustomSpeechTemplate.setText(localizedTemplate);
                     updateSpeechPreview();
-                    saveSpeechTemplate(selectedTemplate);
+                    saveSpeechTemplate(localizedTemplate);
                 }
             }
             
@@ -557,15 +634,16 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
                 
                 // Check if the new template matches any preset
                 boolean matchesPreset = false;
-                for (int i = 0; i < TEMPLATE_VALUES.length - 1; i++) { // Skip the last "Custom" option
-                    if (TEMPLATE_VALUES[i].equals(newTemplate)) {
+                for (int i = 0; i < TEMPLATE_KEYS.length - 1; i++) { // Skip the last "Custom" option
+                    String localizedTemplate = getLocalizedTemplateValue(TEMPLATE_KEYS[i]);
+                    if (localizedTemplate.equals(newTemplate)) {
                         matchesPreset = true;
                         binding.spinnerSpeechTemplate.setSelection(i);
                         break;
                     }
                 }
                 if (!matchesPreset) {
-                    binding.spinnerSpeechTemplate.setSelection(TEMPLATE_VALUES.length - 1); // "Custom" is the last option
+                    binding.spinnerSpeechTemplate.setSelection(TEMPLATE_KEYS.length - 1); // "Custom" is the last option
                 }
                 
                 updateSpeechPreview();
@@ -675,9 +753,9 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
         }
         
         MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this);
-        builder.setTitle("🧪 Format Test Results")
+        builder.setTitle(R.string.dialog_title_format_test_results)
                 .setMessage(Html.fromHtml(testResults.toString(), Html.FROM_HTML_MODE_LEGACY))
-                .setPositiveButton("Got it!", null)
+                .setPositiveButton(R.string.button_got_it, null)
                 .show();
     }
 
@@ -858,6 +936,7 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
 
         // Load media behavior settings
         String savedMediaBehavior = sharedPreferences.getString(KEY_MEDIA_BEHAVIOR, DEFAULT_MEDIA_BEHAVIOR);
+        
         switch (savedMediaBehavior) {
             case MEDIA_BEHAVIOR_PAUSE:
                 binding.radioMediaPause.setChecked(true);
@@ -866,6 +945,11 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
             case MEDIA_BEHAVIOR_DUCK:
                 binding.radioMediaDuck.setChecked(true);
                 binding.duckingVolumeContainer.setVisibility(View.VISIBLE);
+                // Show enhanced warning for Lower Audio
+                binding.duckingWarningText.setVisibility(View.VISIBLE);
+                binding.duckingWarningText.setText(getString(R.string.behavior_ducking_enhanced_warning) + "\n\n" +
+                        getString(R.string.behavior_ducking_device_tip) + "\n\n" +
+                        getString(R.string.behavior_ducking_fallback_tip));
                 break;
             case MEDIA_BEHAVIOR_SILENCE:
                 binding.radioMediaSilence.setChecked(true);
@@ -876,11 +960,22 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
                 binding.duckingVolumeContainer.setVisibility(View.GONE);
                 break;
         }
+        
+        // Lower Audio is now always available - no need to disable
+        binding.radioMediaDuck.setEnabled(true);
 
         // Load ducking volume
         int savedDuckingVolume = sharedPreferences.getInt(KEY_DUCKING_VOLUME, DEFAULT_DUCKING_VOLUME);
         binding.duckingVolumeSeekBar.setValue(savedDuckingVolume);
         updateDuckingVolumeDisplay(savedDuckingVolume);
+
+        // Load ducking fallback strategy
+        String savedFallbackStrategy = loadDuckingFallbackStrategy();
+        if ("pause".equals(savedFallbackStrategy)) {
+            binding.radioFallbackPause.setChecked(true);
+        } else {
+            binding.radioFallbackManual.setChecked(true);
+        }
 
         // Load delay before readout settings
         int savedDelay = sharedPreferences.getInt(KEY_DELAY_BEFORE_READOUT, DEFAULT_DELAY_BEFORE_READOUT);
@@ -909,6 +1004,42 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
         boolean honourDoNotDisturb = sharedPreferences.getBoolean(KEY_HONOUR_DO_NOT_DISTURB, DEFAULT_HONOUR_DO_NOT_DISTURB);
         binding.switchHonourDoNotDisturb.setChecked(honourDoNotDisturb);
         
+        // Load Audio Mode setting
+        boolean honourAudioMode = sharedPreferences.getBoolean("honour_audio_mode", true); // Default to true for safety
+        binding.switchHonourAudioMode.setChecked(honourAudioMode);
+        
+        // Load Phone Calls setting
+        boolean honourPhoneCalls = sharedPreferences.getBoolean(KEY_HONOUR_PHONE_CALLS, DEFAULT_HONOUR_PHONE_CALLS);
+        binding.switchHonourPhoneCalls.setChecked(honourPhoneCalls);
+        
+        // Load Notification Deduplication setting
+        boolean notificationDeduplication = sharedPreferences.getBoolean(KEY_NOTIFICATION_DEDUPLICATION, DEFAULT_NOTIFICATION_DEDUPLICATION);
+        binding.switchNotificationDeduplication.setChecked(notificationDeduplication);
+        
+        // Load Dismissal Memory settings
+        boolean dismissalMemoryEnabled = sharedPreferences.getBoolean(KEY_DISMISSAL_MEMORY_ENABLED, DEFAULT_DISMISSAL_MEMORY_ENABLED);
+        binding.switchDismissalMemory.setChecked(dismissalMemoryEnabled);
+        binding.dismissalMemorySettingsSection.setVisibility(dismissalMemoryEnabled ? View.VISIBLE : View.GONE);
+        
+        int dismissalMemoryTimeout = sharedPreferences.getInt(KEY_DISMISSAL_MEMORY_TIMEOUT, DEFAULT_DISMISSAL_MEMORY_TIMEOUT);
+        switch (dismissalMemoryTimeout) {
+            case 5:
+                binding.radioDismissalMemory5min.setChecked(true);
+                break;
+            case 15:
+                binding.radioDismissalMemory15min.setChecked(true);
+                break;
+            case 30:
+                binding.radioDismissalMemory30min.setChecked(true);
+                break;
+            case 60:
+                binding.radioDismissalMemory1hour.setChecked(true);
+                break;
+            default:
+                binding.radioDismissalMemory15min.setChecked(true); // fallback to default
+                break;
+        }
+        
         // Load speech template settings
         loadSpeechTemplateSettings();
     }
@@ -927,8 +1058,9 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
         } else {
             // Find the preset that matches the saved template
             int presetIndex = -1;
-            for (int i = 0; i < TEMPLATE_VALUES.length; i++) {
-                if (TEMPLATE_VALUES[i].equals(savedTemplate)) {
+            for (int i = 0; i < TEMPLATE_KEYS.length; i++) {
+                String localizedTemplate = getLocalizedTemplateValue(TEMPLATE_KEYS[i]);
+                if (localizedTemplate.equals(savedTemplate)) {
                     presetIndex = i;
                     break;
                 }
@@ -940,7 +1072,7 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
                 binding.editCustomSpeechTemplate.setText(savedTemplate);
             } else {
                 // It's a custom template
-                binding.spinnerSpeechTemplate.setSelection(TEMPLATE_VALUES.length - 1); // Custom is last
+                binding.spinnerSpeechTemplate.setSelection(TEMPLATE_KEYS.length - 1); // Custom is last
                 binding.editCustomSpeechTemplate.setText(savedTemplate);
             }
             
@@ -949,6 +1081,21 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
             customFormatContainer.setVisibility(View.VISIBLE);
             updateSpeechPreview();
         }
+    }
+    
+    /**
+     * Get localized template value based on user's TTS language setting
+     */
+    private String getLocalizedTemplateValue(String templateKey) {
+        if ("VARIED".equals(templateKey) || "CUSTOM".equals(templateKey)) {
+            return templateKey;
+        }
+        
+        // Get the user's TTS language setting
+        android.content.SharedPreferences voiceSettingsPrefs = getSharedPreferences("VoiceSettings", MODE_PRIVATE);
+        String ttsLanguageCode = voiceSettingsPrefs.getString("tts_language", "system");
+        
+        return TtsLanguageManager.getLocalizedTtsStringByName(this, ttsLanguageCode, templateKey);
     }
     
     private void saveSpeechTemplate(String template) {
@@ -1472,6 +1619,43 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
         InAppLogger.log("BehaviorSettings", "Honour Do Not Disturb changed to: " + honour);
     }
 
+    private void saveHonourAudioMode(boolean honour) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putBoolean("honour_audio_mode", honour);
+        editor.apply();
+        InAppLogger.log("BehaviorSettings", "Honour Audio Mode changed to: " + honour);
+    }
+
+    private void saveHonourPhoneCalls(boolean honour) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putBoolean(KEY_HONOUR_PHONE_CALLS, honour);
+        editor.apply();
+        InAppLogger.log("BehaviorSettings", "Honour phone calls changed to: " + honour);
+    }
+
+    private void saveNotificationDeduplication(boolean enabled) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putBoolean(KEY_NOTIFICATION_DEDUPLICATION, enabled);
+        editor.apply();
+        InAppLogger.log("BehaviorSettings", "Notification deduplication changed to: " + enabled);
+    }
+
+    private void saveDismissalMemoryEnabled(boolean enabled) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putBoolean(KEY_DISMISSAL_MEMORY_ENABLED, enabled);
+        editor.apply();
+        InAppLogger.log("BehaviorSettings", "Dismissal memory enabled changed to: " + enabled);
+    }
+
+    private void saveDismissalMemoryTimeout(int timeoutMinutes) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putInt(KEY_DISMISSAL_MEMORY_TIMEOUT, timeoutMinutes);
+        editor.apply();
+        InAppLogger.log("BehaviorSettings", "Dismissal memory timeout changed to: " + timeoutMinutes + " minutes");
+    }
+    
+
+
     private void updateThresholdMarker(float threshold) {
         // Check if binding is null (activity might be destroyed)
         if (binding == null) {
@@ -1776,7 +1960,7 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
                 boolean isTriggered = (currentWaveValue == 0) || (currentWaveValue <= threshold);
                 
                 if (isTriggered) {
-                    binding.textCurrentWave.setTextColor(getColor(android.R.color.holo_green_dark));
+                    binding.textCurrentWave.setTextColor(getColor(android.R.color.white));
                 } else {
                     binding.textCurrentWave.setTextColor(getColor(android.R.color.secondary_text_dark));
                 }
@@ -1793,6 +1977,16 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
     public boolean onSupportNavigateUp() {
         onBackPressed();
         return true;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        
+        // Check if audio ducking setting has changed
+
+        
+        InAppLogger.logAppLifecycle("Behavior Settings resumed", "BehaviorSettingsActivity");
     }
 
     @Override
@@ -1886,10 +2080,12 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
         
         String htmlText = "Choose how SpeakThat handles notifications while music/videos play:<br><br>" +
                 "<b>🎵 Ignore</b> - Speaks over your media. Simple but can be disruptive.<br><br>" +
-                "<b>⏸️ Pause</b> - Pauses media completely while speaking. Good for podcasts, but interrupts music flow.<br><br>" +
-                "<b>🔉 Lower Audio (Recommended)</b> - Temporarily reduces media volume so you can hear both. Most natural experience.<br><br>" +
+                "<b>⏸️ Pause</b> - Pauses media completely while speaking. Good for podcasts, but interrupts music flow. <i>Now with improved compatibility and fallback strategies.</i><br><br>" +
+                "<b>🔉 Lower Audio</b> - Temporarily reduces media volume so you can hear both.<br><br>" +
                 "<b>🔇 Silence</b> - Doesn't speak while media plays. Quiet but you might miss important notifications.<br><br>" +
-                "Lower Audio works like a car radio - it ducks the music down when speaking, then brings it back up. Perfect for music lovers who still want notifications.";
+                "Lower Audio is HIGHLY dependent on your device. Some devices do not support it all the time for third party apps!<br>" +
+                "Pause is recommended for better reliability!";
+
         
         MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this);
         builder.setTitle("Media Behavior Options")
@@ -1989,7 +2185,7 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
                 "This feature was inspired by Touchless Notifications and helps create a more polished, less jarring notification experience.";
         
         MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this);
-        builder.setTitle("Delay Before Readout")
+        builder.setTitle(R.string.dialog_title_delay_before_readout)
                 .setMessage(Html.fromHtml(htmlText, Html.FROM_HTML_MODE_LEGACY))
                 .setPositiveButton(R.string.use_recommended, (dialog, which) -> {
                     // Track recommendation usage
@@ -2026,9 +2222,9 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
                 "<b>Note:</b> This only affects how the app name is spoken, not the actual app name on your device.";
         
         MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this);
-        builder.setTitle("Custom App Names")
+        builder.setTitle(R.string.dialog_title_custom_app_names)
                 .setMessage(Html.fromHtml(htmlText, Html.FROM_HTML_MODE_LEGACY))
-                .setPositiveButton("Got it!", null)
+                .setPositiveButton(R.string.button_got_it, null)
                 .show();
     }
 
@@ -2057,9 +2253,9 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
                 "<b>Note:</b> Only notifications from the same app are affected. Different apps can still send notifications normally.";
         
         MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this);
-        builder.setTitle("Notification Cooldown")
+        builder.setTitle(R.string.dialog_title_notification_cooldown)
                 .setMessage(Html.fromHtml(htmlText, Html.FROM_HTML_MODE_LEGACY))
-                .setPositiveButton("Got it!", null)
+                .setPositiveButton(R.string.button_got_it, null)
                 .show();
     }
     
@@ -2184,9 +2380,9 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
                 "<b>💡 Remember that different apps present their notifications in different ways.</b><br><br>";
         
         MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this);
-        builder.setTitle("🗣️ Speech Formats - Complete Guide")
+        builder.setTitle(R.string.dialog_title_speech_formats_guide)
                 .setMessage(Html.fromHtml(htmlText, Html.FROM_HTML_MODE_LEGACY))
-                .setPositiveButton("Use Recommended", (dialog, which) -> {
+                .setPositiveButton(R.string.button_use_recommended, (dialog, which) -> {
                     // Track recommendation usage
                     trackDialogUsage("speech_template_recommended");
                     
@@ -2198,7 +2394,7 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
                     
                     Toast.makeText(this, "Set to recommended format: Default", Toast.LENGTH_SHORT).show();
                 })
-                .setNegativeButton("Got it!", null)
+                .setNegativeButton(R.string.button_got_it, null)
                 .show();
     }
 
@@ -2222,7 +2418,7 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
                 "<b>💡 Tip:</b> This feature works seamlessly with your device's existing Do Not Disturb settings. No additional configuration needed!";
         
         MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this);
-        builder.setTitle("Honour Do Not Disturb")
+        builder.setTitle(R.string.dialog_title_honour_do_not_disturb)
                 .setMessage(Html.fromHtml(htmlText, Html.FROM_HTML_MODE_LEGACY))
                 .setPositiveButton(R.string.use_recommended, (dialog, which) -> {
                     // Track recommendation usage
@@ -2233,6 +2429,142 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
                     saveHonourDoNotDisturb(true);
                 })
                 .setNegativeButton(R.string.got_it, null)
+                .show();
+    }
+
+    private void showAudioModeDialog() {
+        // Track dialog usage for analytics
+        trackDialogUsage("audio_mode_info");
+        
+        String htmlText = "Honour Audio Mode ensures notifications are only read when your device is in Sound mode:<br><br>" +
+                "<b>🎯 What it does:</b><br>" +
+                "When your device is in Silent or Vibrate mode, SpeakThat will not read any notifications aloud. This prevents unwanted audio when your phone is muted.<br><br>" +
+                "<b>📱 When it's useful:</b><br>" +
+                "• <b>Silent mode</b> - No audio interruptions when phone is completely muted<br>" +
+                "• <b>Vibrate mode</b> - Respects your choice to only feel notifications<br>" +
+                "• <b>Meetings</b> - No embarrassing audio when phone is on vibrate<br>" +
+                "• <b>Quiet environments</b> - Ensures notifications only play when you can hear them<br><br>" +
+                "<b>⚙️ How it works:</b><br>" +
+                "• Automatically detects your device's audio mode<br>" +
+                "• Only allows TTS when in Sound mode (RINGER_MODE_NORMAL)<br>" +
+                "• Blocks TTS in Silent mode (RINGER_MODE_SILENT)<br>" +
+                "• Blocks TTS in Vibrate mode (RINGER_MODE_VIBRATE)<br>" +
+                "• Notifications resume normally when switched back to Sound mode<br><br>" +
+                "<b>💡 Tip:</b> This feature works with your device's physical volume buttons and system settings. Perfect for users who frequently switch between audio modes!";
+        
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this);
+        builder.setTitle(R.string.dialog_title_honour_audio_mode)
+                .setMessage(Html.fromHtml(htmlText, Html.FROM_HTML_MODE_LEGACY))
+                .setPositiveButton(R.string.use_recommended, (dialog, which) -> {
+                    // Track recommendation usage
+                    trackDialogUsage("audio_mode_recommended");
+                    
+                    // Enable honour audio mode
+                    binding.switchHonourAudioMode.setChecked(true);
+                    saveHonourAudioMode(true);
+                })
+                .setNegativeButton(R.string.got_it, null)
+                .show();
+    }
+
+    private void showPhoneCallsDialog() {
+        // Track dialog usage for analytics
+        trackDialogUsage("phone_calls_info");
+        
+        String htmlText = "Honour Phone Calls prevents notification readouts when you're on a phone call:<br><br>" +
+                "<b>🎯 What it does:</b><br>" +
+                "When you're on a phone call, SpeakThat will not read any notifications aloud. This prevents interruptions during important conversations.<br><br>" +
+                "<b>📱 When it's useful:</b><br>" +
+                "• <b>Important calls</b> - No interruptions during business or personal calls<br>" +
+                "• <b>Conference calls</b> - Maintains professional audio environment<br>" +
+                "• <b>Voice calls</b> - Prevents notification audio from being heard by call participants<br>" +
+                "• <b>Video calls</b> - Keeps your audio clean during video conversations<br><br>" +
+                "<b>⚙️ How it works:</b><br>" +
+                "• Automatically detects when you're on a phone call<br>" +
+                "• Uses both AudioManager and TelephonyManager for reliable detection<br>" +
+                "• Works with all types of calls (cellular, VoIP, video calls)<br>" +
+                "• Notifications resume normally when call ends<br>" +
+                "• Gracefully handles permission restrictions<br><br>" +
+                "<b>💡 Tip:</b> This feature respects your conversation privacy and ensures you never miss important notifications due to call interruptions!";
+        
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this);
+        builder.setTitle(R.string.dialog_title_honour_phone_calls)
+                .setMessage(Html.fromHtml(htmlText, Html.FROM_HTML_MODE_LEGACY))
+                .setPositiveButton(R.string.use_recommended, (dialog, which) -> {
+                    // Track recommendation usage
+                    trackDialogUsage("phone_calls_recommended");
+                    
+                    // Enable honour phone calls
+                    binding.switchHonourPhoneCalls.setChecked(true);
+                    saveHonourPhoneCalls(true);
+                })
+                .setNegativeButton(R.string.got_it, null)
+                .show();
+    }
+
+    private void showDeduplicationDialog() {
+        // Track dialog usage for analytics
+        trackDialogUsage("deduplication_info");
+        
+        String htmlText = "Notification Deduplication prevents the same notification from being read multiple times:<br><br>" +
+                "<b>🎯 What it does:</b><br>" +
+                "When the same notification is posted multiple times in quick succession, SpeakThat will only read it once. This prevents annoying duplicate readouts.<br><br>" +
+                "<b>📱 When it's useful:</b><br>" +
+                "• <b>Duplicate notifications</b> - Some apps post the same notification multiple times<br>" +
+                "• <b>System updates</b> - Android may post notifications multiple times during updates<br>" +
+                "• <b>App restarts</b> - Apps may re-post notifications when restarting<br>" +
+                "• <b>Network issues</b> - Connectivity problems can cause duplicate notifications<br><br>" +
+                "<b>⚙️ How it works:</b><br>" +
+                "• Uses a 5-second window to detect duplicates<br>" +
+                "• Compares notification package, ID, and content hash<br>" +
+                "• Automatically cleans up old entries to save memory<br>" +
+                "• Logs when duplicates are detected for debugging<br>" +
+                "• Works with all notification types and apps<br><br>" +
+                "<b>💡 Tip:</b> Enable this if you experience duplicate notifications. Most users won't need this, but it's a quick fix for devices with notification issues!";
+        
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this);
+        builder.setTitle(R.string.dialog_title_notification_deduplication)
+                .setMessage(Html.fromHtml(htmlText, Html.FROM_HTML_MODE_LEGACY))
+                .setPositiveButton(R.string.got_it, null)
+                .show();
+    }
+
+    private void showDismissalMemoryDialog() {
+        // Track dialog usage for analytics
+        trackDialogUsage("dismissal_memory_info");
+        
+        String htmlText = getString(R.string.dialog_dismissal_memory_explanation);
+        
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this);
+        builder.setTitle(R.string.dialog_title_dismissal_memory)
+                .setMessage(Html.fromHtml(htmlText, Html.FROM_HTML_MODE_LEGACY))
+                .setPositiveButton(R.string.got_it, null)
+                .show();
+    }
+
+    private void showAudioDuckingDisabledDialog() {
+        // Track dialog usage for analytics
+        trackDialogUsage("audio_ducking_disabled");
+        
+        MaterialAlertDialogBuilder builder = new MaterialAlertDialogBuilder(this);
+        builder.setTitle(R.string.audio_ducking_disabled_title)
+                .setMessage(R.string.audio_ducking_disabled_message)
+                .setPositiveButton(R.string.audio_ducking_disabled_ok, null)
+                .setNegativeButton(R.string.audio_ducking_disabled_enable, (dialog, which) -> {
+                    // Enable Lower Audio directly
+                    binding.mediaBehaviorGroup.clearCheck();
+                    binding.radioMediaDuck.setChecked(true);
+                    
+                    // Show ducking volume controls with enhanced warning
+                    binding.duckingVolumeContainer.setVisibility(View.VISIBLE);
+                    binding.duckingWarningText.setVisibility(View.VISIBLE);
+                    binding.duckingWarningText.setText(getString(R.string.behavior_ducking_enhanced_warning) + "\n\n" +
+                            getString(R.string.behavior_ducking_device_tip) + "\n\n" +
+                            getString(R.string.behavior_ducking_fallback_tip));
+                    
+                    // Save setting
+                    saveMediaBehavior(MEDIA_BEHAVIOR_DUCK);
+                })
                 .show();
     }
 
@@ -2252,6 +2584,26 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
         savePriorityApps();
         
         Toast.makeText(this, "Added common priority apps. You can remove or add more as needed.", Toast.LENGTH_LONG).show();
+    }
+
+
+
+    /**
+     * Save the ducking fallback strategy preference
+     */
+    private void saveDuckingFallbackStrategy(String strategy) {
+        SharedPreferences.Editor editor = sharedPreferences.edit();
+        editor.putString("ducking_fallback_strategy", strategy);
+        editor.apply();
+        
+        InAppLogger.log("LowerAudio", "Ducking fallback strategy saved: " + strategy);
+    }
+
+    /**
+     * Load the ducking fallback strategy preference
+     */
+    private String loadDuckingFallbackStrategy() {
+        return sharedPreferences.getString("ducking_fallback_strategy", "manual");
     }
 
     private void trackDialogUsage(String dialogType) {
@@ -2503,6 +2855,98 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
         return false;
     }
 
+    /**
+     * Check if the device is currently in Sound mode (not Silent or Vibrate)
+     * This can be used to prevent TTS when the phone is muted
+     * @param context The application context
+     * @return true if device is in Sound mode, false if Silent or Vibrate
+     */
+    public static boolean isDeviceInSoundMode(Context context) {
+        AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager != null) {
+            int ringerMode = audioManager.getRingerMode();
+            // Only allow TTS when in RINGER_MODE_NORMAL (Sound mode)
+            // RINGER_MODE_SILENT = 0, RINGER_MODE_VIBRATE = 1, RINGER_MODE_NORMAL = 2
+            return ringerMode == AudioManager.RINGER_MODE_NORMAL;
+        }
+        return false;
+    }
+
+    /**
+     * Check if SpeakThat should honour audio mode (only speak when in Sound mode)
+     * @param context The application context
+     * @return true if audio mode should be honoured, false otherwise
+     */
+    public static boolean shouldHonourAudioMode(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        boolean honourAudioMode = prefs.getBoolean("honour_audio_mode", true); // Default to true for safety
+        
+        if (honourAudioMode) {
+            return !isDeviceInSoundMode(context); // Return true if we should block (not in sound mode)
+        }
+        return false;
+    }
+
+    /**
+     * Check if the device is currently in a phone call
+     * @param context The application context
+     * @return true if a phone call is active, false otherwise
+     */
+    public static boolean isPhoneCallActive(Context context) {
+        try {
+            // Check audio mode - if in call mode, a call is likely active
+            AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+            if (audioManager != null) {
+                int audioMode = audioManager.getMode();
+                // AudioManager.MODE_IN_CALL indicates an active phone call
+                if (audioMode == AudioManager.MODE_IN_CALL) {
+                    return true;
+                }
+            }
+            
+            // Additional check using TelephonyManager for more reliable detection
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                // For Android 9+ (API 28+), we can use TelephonyManager
+                android.telephony.TelephonyManager telephonyManager = 
+                    (android.telephony.TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
+                if (telephonyManager != null) {
+                    int callState = telephonyManager.getCallState();
+                    // TelephonyManager.CALL_STATE_OFFHOOK indicates an active call
+                    return callState == android.telephony.TelephonyManager.CALL_STATE_OFFHOOK;
+                }
+            }
+            
+            return false;
+        } catch (SecurityException e) {
+            // If we don't have permission to check call state, fall back to audio mode only
+            Log.d("BehaviorSettings", "No permission to check call state, using audio mode fallback");
+            AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+            if (audioManager != null) {
+                int audioMode = audioManager.getMode();
+                return audioMode == AudioManager.MODE_IN_CALL;
+            }
+            return false;
+        } catch (Exception e) {
+            Log.e("BehaviorSettings", "Error checking phone call state", e);
+            return false;
+        }
+    }
+
+    /**
+     * Check if SpeakThat should honour phone calls (prevent readouts during calls)
+     * @param context The application context
+     * @return true if phone calls should be honoured, false otherwise
+     */
+    public static boolean shouldHonourPhoneCalls(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        boolean honourPhoneCalls = prefs.getBoolean(KEY_HONOUR_PHONE_CALLS, DEFAULT_HONOUR_PHONE_CALLS);
+        
+        if (honourPhoneCalls) {
+            return isPhoneCallActive(context);
+        }
+        return false;
+    }
+
     // Timeout display methods
     private void updateShakeTimeoutDisplay(int timeoutSeconds) {
         if (binding != null) {
@@ -2533,10 +2977,10 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
         new MaterialAlertDialogBuilder(this)
             .setTitle(title)
             .setMessage(Html.fromHtml(message, Html.FROM_HTML_MODE_COMPACT))
-            .setPositiveButton("Nevermind, keep the timeout enabled (Recommended)", (dialog, which) -> {
+            .setPositiveButton(R.string.button_nevermind_keep_timeout, (dialog, which) -> {
                 // User chose to keep timeout enabled - do nothing
             })
-            .setNegativeButton("Disable the timeout", (dialog, which) -> {
+            .setNegativeButton(R.string.button_disable_timeout, (dialog, which) -> {
                 // User confirmed - disable timeout
                 if (type.equals("shake")) {
                     isProgrammaticallySettingSwitch = true;
@@ -2570,7 +3014,7 @@ public class BehaviorSettingsActivity extends AppCompatActivity implements Senso
         new MaterialAlertDialogBuilder(this)
             .setTitle(title)
             .setMessage(Html.fromHtml(message, Html.FROM_HTML_MODE_COMPACT))
-            .setPositiveButton("Got it", null)
+            .setPositiveButton(R.string.button_got_it, null)
             .show();
     }
 } 

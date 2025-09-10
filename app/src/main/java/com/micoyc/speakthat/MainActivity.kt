@@ -1,7 +1,11 @@
 package com.micoyc.speakthat
 
 import android.app.AlertDialog
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.hardware.Sensor
@@ -14,6 +18,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.text.TextUtils
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import com.micoyc.speakthat.VoiceSettingsActivity
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -27,18 +32,24 @@ import android.os.Handler
 import android.os.Looper
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
 import android.widget.TextView
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import android.graphics.drawable.AnimatedVectorDrawable
+import android.animation.AnimatorInflater
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 
 class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEventListener {
     
     private lateinit var binding: ActivityMainBinding
-    private lateinit var sharedPreferences: SharedPreferences
+    private var sharedPreferences: SharedPreferences? = null
     private var textToSpeech: TextToSpeech? = null
     private var isTtsInitialized = false
     private var isFirstLogoTap = true
     private val easterEggLines = mutableListOf<String>()
+    private var animatedLogo: AnimatedVectorDrawable? = null
     
     // Shake detection
     private var sensorManager: SensorManager? = null
@@ -55,9 +66,56 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     private var voiceSettingsPrefs: SharedPreferences? = null
     private val voiceSettingsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         when (key) {
-            "speech_rate", "pitch", "voice_name", "language", "audio_usage", "content_type" -> {
+            "speech_rate", "pitch", "voice_name", "audio_usage", "content_type" -> {
                 applyVoiceSettings()
                 Log.d(TAG, "MainActivity voice settings updated: $key")
+            }
+            "language", "tts_language" -> {
+                // For language changes, we need to reinitialize TTS to ensure it uses the new language
+                InAppLogger.log("MainActivity", "Language settings changed - reinitializing TTS")
+                reinitializeTtsWithCurrentSettings()
+            }
+        }
+    }
+    
+    /**
+     * SharedPreferences listener to sync UI when Quick Settings tile changes the master switch
+     * This ensures the main app's UI stays in sync even when the app is in the background
+     */
+    private val masterSwitchListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == KEY_MASTER_SWITCH_ENABLED) {
+            // Check if we need to update the UI
+            val currentState = isMasterSwitchEnabled(this)
+            val switchState = binding.switchMasterControl.isChecked
+            
+            if (currentState != switchState) {
+                Log.d(TAG, "MainActivity: Detected master switch change via SharedPreferences - current: $currentState, switch: $switchState")
+                
+                // Update UI on main thread
+                runOnUiThread {
+                    // Temporarily remove listener to prevent infinite loop
+                    binding.switchMasterControl.setOnCheckedChangeListener(null)
+                    
+                    // Update switch to match current state
+                    binding.switchMasterControl.isChecked = currentState
+                    
+                    // Update status text
+                    if (currentState) {
+                        binding.textMasterSwitchStatus.text = getString(R.string.main_master_switch_enabled)
+                        binding.textMasterSwitchStatus.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.purple_200))
+                    } else {
+                        binding.textMasterSwitchStatus.text = getString(R.string.main_master_switch_disabled)
+                        binding.textMasterSwitchStatus.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.red_200))
+                    }
+                    
+                    // Restore listener
+                    binding.switchMasterControl.setOnCheckedChangeListener { _, isChecked ->
+                        handleMasterSwitchToggle(isChecked)
+                    }
+                    
+                    Log.d(TAG, "MainActivity: UI synced via SharedPreferences listener")
+                    InAppLogger.log("QuickSettingsSync", "MainActivity UI synced via SharedPreferences: $currentState")
+                }
             }
         }
     }
@@ -72,9 +130,13 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         private const val KEY_DARK_MODE = "dark_mode"
         private const val KEY_FIRST_LOGO_TAP = "first_logo_tap"
         private const val KEY_SHAKE_TO_STOP_ENABLED = "shake_to_stop_enabled"
+        private const val KEY_WAVE_TO_STOP_ENABLED = "wave_to_stop_enabled"
         private const val KEY_SHAKE_THRESHOLD = "shake_threshold"
         private const val KEY_MASTER_SWITCH_ENABLED = "master_switch_enabled"
         private const val KEY_LAST_EASTER_EGG = "last_easter_egg_line"
+        private const val REQUEST_NOTIFICATION_PERMISSION = 1001
+        // TRANSLATION BANNER - REMOVE WHEN NO LONGER NEEDED
+    
         @JvmField
         var isSensorListenerActive: Boolean = false
         /**
@@ -108,24 +170,35 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         voiceSettingsPrefs = getSharedPreferences("VoiceSettings", MODE_PRIVATE)
         voiceSettingsPrefs?.registerOnSharedPreferenceChangeListener(voiceSettingsListener)
         
+        // Register master switch listener for Quick Settings tile sync
+        sharedPreferences?.registerOnSharedPreferenceChangeListener(masterSwitchListener)
+        
         // Apply saved theme first
         applySavedTheme()
+        
+        // Apply saved language/locale setting
+        applySavedLanguage()
         
         // Initialize view binding
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Get version number
-        val versionName = packageManager.getPackageInfo(packageName, 0).versionName
-        val versionText = getString(R.string.version_format, versionName)
+        // Get version number with build variant
+        val packageInfo = packageManager.getPackageInfo(packageName, 0)
+        val buildVariant = InAppLogger.getBuildVariantInfo()
+        val versionText = getString(R.string.version_format_with_variant, packageInfo.versionName, buildVariant)
         findViewById<TextView>(R.id.versionnumber).text = versionText
 
         // Configure system UI for proper insets handling
         configureSystemUI()
         
-        // Log app lifecycle
+        // Log app lifecycle and build variant
         InAppLogger.logAppLifecycle("MainActivity created")
         InAppLogger.logSystemEvent("App started", "MainActivity")
+        InAppLogger.logSystemEvent("Build variant", InAppLogger.getBuildVariantInfo())
+        
+        // Log Quick Settings tile status
+        QuickSettingsHelper.logTileStatus(this)
         
         // Initialize components
         initializeShakeDetection()
@@ -133,7 +206,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         loadEasterEggs()
         
         // Load logo tap state
-        isFirstLogoTap = sharedPreferences.getBoolean(KEY_FIRST_LOGO_TAP, true)
+        isFirstLogoTap = sharedPreferences?.getBoolean(KEY_FIRST_LOGO_TAP, true) ?: true
         
         // Set up UI
         setupUI()
@@ -142,7 +215,42 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         // Check for updates automatically (if enabled)
         Log.d(TAG, "About to check for updates automatically")
         checkForUpdatesIfEnabled()
+        
+        // Check for crash logs and notify user if available
+        checkForCrashLogs()
+        
+        // Initialize review reminder and track app session
+        initializeReviewReminder()
     }
+    
+
+    
+    override fun onPause() {
+        super.onPause()
+        // Stop shake listening if active
+        stopShakeListening()
+        InAppLogger.logAppLifecycle("MainActivity paused")
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        // Unregister voice settings listener
+        voiceSettingsPrefs?.unregisterOnSharedPreferenceChangeListener(voiceSettingsListener)
+        
+        // Unregister master switch listener (safely handle null case)
+        sharedPreferences?.unregisterOnSharedPreferenceChangeListener(masterSwitchListener)
+        
+        // Clean up TTS
+        textToSpeech?.stop()
+        textToSpeech?.shutdown()
+        
+        // Clean up sensors
+        sensorManager?.unregisterListener(this)
+        
+        InAppLogger.logAppLifecycle("MainActivity destroyed")
+    }
+    
+
     
     override fun onResume() {
         super.onResume()
@@ -157,17 +265,15 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         // Check for updates automatically when returning to app (if enabled)
         Log.d(TAG, "About to check for updates on resume")
         checkForUpdatesIfEnabled()
-    }
-    
-    override fun onPause() {
-        super.onPause()
-        // Stop shake listening if active
-        stopShakeListening()
-        InAppLogger.logAppLifecycle("MainActivity paused")
+        
+
     }
     
     private fun setupUI() {
         setupClickListeners()
+        setupAnimatedLogo()
+        // TRANSLATION BANNER - REMOVE WHEN NO LONGER NEEDED
+
     }
     
     private fun setupClickListeners() {
@@ -194,11 +300,73 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             InAppLogger.logUserAction("Logo clicked", "First tap: $isFirstLogoTap")
             handleLogoClick()
         }
+        
+
+    }
+    
+    private fun setupAnimatedLogo() {
+        try {
+            // Initialize the animated logo drawable
+            animatedLogo = ContextCompat.getDrawable(this, R.drawable.logo_speakthat_animated) as? AnimatedVectorDrawable
+            if (animatedLogo != null) {
+                Log.d(TAG, "Animated logo initialized successfully")
+                InAppLogger.log("MainActivity", "Animated logo setup successful")
+            } else {
+                Log.w(TAG, "Failed to initialize animated logo")
+                InAppLogger.logError("MainActivity", "Failed to initialize animated logo")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting up animated logo", e)
+            InAppLogger.logError("MainActivity", "Error setting up animated logo: ${e.message}")
+        }
+    }
+    
+    private fun triggerLogoAnimation() {
+        try {
+            // Randomly select one of several animated logo variants for variety
+            val animatedLogoVariants = arrayOf(
+                R.drawable.logo_speakthat_animated,
+                R.drawable.logo_speakthat_animated_variant1,
+                R.drawable.logo_speakthat_animated_variant2,
+                R.drawable.logo_speakthat_animated_variant3
+            )
+            
+            val randomVariant = animatedLogoVariants.random()
+            val animatedLogo = ContextCompat.getDrawable(this, randomVariant) as? AnimatedVectorDrawable
+            
+            if (animatedLogo != null) {
+                // Set the animated logo as the ImageView's drawable
+                binding.logoSpeakThat.setImageDrawable(animatedLogo)
+                
+                // Start the animation
+                animatedLogo.start()
+                
+                // Log the animation start
+                Log.d(TAG, "Logo animation started with bright colors (variant: $randomVariant)")
+                InAppLogger.log("MainActivity", "Logo animation triggered with variant: $randomVariant")
+                
+                // Reset to static logo after animation completes (approximately 2 seconds)
+                Handler(Looper.getMainLooper()).postDelayed({
+                    try {
+                        binding.logoSpeakThat.setImageResource(R.drawable.logo_speakthat)
+                        Log.d(TAG, "Logo animation completed, reset to static")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error resetting logo to static", e)
+                    }
+                }, 2000) // 2 seconds delay
+            } else {
+                Log.w(TAG, "Animated logo is null, cannot trigger animation")
+                InAppLogger.logError("MainActivity", "Animated logo is null")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error triggering logo animation", e)
+            InAppLogger.logError("MainActivity", "Error triggering logo animation: ${e.message}")
+        }
     }
     
     private fun updateServiceStatus() {
         val isEnabled = isNotificationServiceEnabled()
-        val isMasterEnabled = sharedPreferences.getBoolean(KEY_MASTER_SWITCH_ENABLED, true)
+        val isMasterEnabled = sharedPreferences?.getBoolean(KEY_MASTER_SWITCH_ENABLED, true) ?: true
         
         // Update master switch state
         binding.switchMasterControl.setOnCheckedChangeListener(null) // Prevent infinite loop
@@ -209,27 +377,26 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         
         // Update master switch status text
         if (isMasterEnabled) {
-            binding.textMasterSwitchStatus.text = "SpeakThat will read notifications when active"
-            binding.textMasterSwitchStatus.setTextColor(ContextCompat.getColor(this, R.color.purple_200))
+            binding.textMasterSwitchStatus.text = getString(R.string.main_master_switch_enabled)
+            binding.textMasterSwitchStatus.setTextColor(ContextCompat.getColor(this, R.color.purple_card_text_secondary))
         } else {
-            binding.textMasterSwitchStatus.text = "SpeakThat is disabled - notifications will not be read"
-            binding.textMasterSwitchStatus.setTextColor(ContextCompat.getColor(this, R.color.red_200))
+            binding.textMasterSwitchStatus.text = getString(R.string.main_master_switch_disabled)
+            binding.textMasterSwitchStatus.setTextColor(ContextCompat.getColor(this, R.color.purple_card_text_secondary))
         }
         
-        // Update permission status
+        // Update permission status with icon indicators
         if (isEnabled) {
-            // Service is enabled - use brand color
-            binding.textServiceStatus.text = getString(R.string.service_enabled)
-            binding.textServiceStatus.setTextColor(ContextCompat.getColor(this, R.color.purple_200))
-            binding.textPermissionStatus.text = "SpeakThat has notification access"
-            binding.buttonEnablePermission.text = "Disable Notification Access"
+            // Service is enabled - use check icon
+            binding.iconPermissionStatus.setImageResource(R.drawable.check_24px)
+            binding.textPermissionStatus.text = getString(R.string.main_notification_access_granted)
         } else {
-            // Service is disabled
-            binding.textServiceStatus.text = getString(R.string.service_disabled)
-            binding.textServiceStatus.setTextColor(ContextCompat.getColor(this, R.color.red_200))
+            // Service is disabled - use close icon
+            binding.iconPermissionStatus.setImageResource(R.drawable.close_24px)
             binding.textPermissionStatus.text = getString(R.string.permission_description)
-            binding.buttonEnablePermission.text = getString(R.string.open_settings)
         }
+        
+        // Always show "Permission Settings" for consistent button sizing
+        binding.buttonEnablePermission.text = getString(R.string.open_settings)
     }
     
     private fun isNotificationServiceEnabled(): Boolean {
@@ -256,10 +423,13 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     
     private fun handleMasterSwitchToggle(isEnabled: Boolean) {
         // Save the master switch state
-        sharedPreferences.edit().putBoolean(KEY_MASTER_SWITCH_ENABLED, isEnabled).apply()
+        sharedPreferences?.edit()?.putBoolean(KEY_MASTER_SWITCH_ENABLED, isEnabled)?.apply()
         
         // Update UI immediately
         updateServiceStatus()
+        
+        // Manage notifications based on master switch state
+        manageNotificationsForMasterSwitch(isEnabled)
         
         // Log the change
         InAppLogger.logSettingsChange("Master Switch", (!isEnabled).toString(), isEnabled.toString())
@@ -273,13 +443,85 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         }
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
         
+
+        
         Log.d(TAG, "Master switch toggled: $isEnabled")
+    }
+    
+    /**
+     * Manage SpeakThat notifications based on master switch state
+     */
+    private fun manageNotificationsForMasterSwitch(isEnabled: Boolean) {
+        try {
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            
+            if (isEnabled) {
+                // Master switch enabled - show persistent notification if setting is enabled
+                val isPersistentNotificationEnabled = sharedPreferences?.getBoolean("persistent_notification", false) ?: false
+                if (isPersistentNotificationEnabled) {
+                    // Create notification channel for Android O+
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        val channel = NotificationChannel(
+                            "SpeakThat_Channel",
+                            "SpeakThat Notifications",
+                            NotificationManager.IMPORTANCE_DEFAULT
+                        ).apply {
+                            description = "Notifications from SpeakThat app"
+                            setSound(null, null) // No sound
+                            enableVibration(false) // No vibration
+                            setShowBadge(false) // No badge
+                        }
+                        notificationManager.createNotificationChannel(channel)
+                    }
+                    
+                    // Create intent for opening SpeakThat
+                    val openAppIntent = Intent(this, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    }
+                    val openAppPendingIntent = PendingIntent.getActivity(
+                        this, 0, openAppIntent, 
+                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    )
+                    
+                    // Build notification
+                    val notification = androidx.core.app.NotificationCompat.Builder(this, "SpeakThat_Channel")
+                        .setContentTitle(getString(R.string.main_notification_title_active))
+                        .setContentText(getString(R.string.main_notification_content_tap_settings))
+                        .setSmallIcon(R.drawable.speakthaticon)
+                        .setOngoing(true) // Persistent notification
+                        .setSilent(true) // Silent notification
+                        .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)
+                        .setContentIntent(openAppPendingIntent)
+                        .addAction(
+                            R.drawable.speakthaticon,
+                            "Open SpeakThat!",
+                            openAppPendingIntent
+                        )
+                        .build()
+                    
+                    // Show notification
+                    notificationManager.notify(1001, notification)
+                    Log.d(TAG, "Persistent notification shown due to master switch enabled")
+                    InAppLogger.log("Notifications", "Persistent notification shown due to master switch enabled")
+                }
+            } else {
+                // Master switch disabled - hide all SpeakThat notifications
+                notificationManager.cancel(1001) // Persistent notification
+                notificationManager.cancel(1002) // Reading notification
+                Log.d(TAG, "All SpeakThat notifications hidden due to master switch disabled")
+                InAppLogger.log("Notifications", "All SpeakThat notifications hidden due to master switch disabled")
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error managing notifications for master switch", e)
+            InAppLogger.logError("Notifications", "Error managing notifications for master switch: ${e.message}")
+        }
     }
     
     // showNotificationHistory moved to DevelopmentSettingsActivity
     
     private fun applySavedTheme() {
-        val isDarkMode = sharedPreferences.getBoolean(KEY_DARK_MODE, false) // Default to light mode
+        val isDarkMode = sharedPreferences?.getBoolean(KEY_DARK_MODE, false) ?: false // Default to light mode
         
         if (isDarkMode) {
             AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
@@ -288,10 +530,66 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         }
     }
     
+    private fun applySavedLanguage() {
+        // Get saved language from VoiceSettings preferences
+        val voiceSettingsPrefs = getSharedPreferences("VoiceSettings", MODE_PRIVATE)
+        val savedLanguage = voiceSettingsPrefs.getString("language", "en_US") ?: "en_US"
+        
+        try {
+            // Parse the locale string (e.g., "ja_JP" -> Locale("ja", "JP"))
+            val localeParts = savedLanguage.split("_")
+            val targetLocale = when {
+                localeParts.size >= 2 -> java.util.Locale(localeParts[0], localeParts[1])
+                localeParts.size == 1 -> java.util.Locale(localeParts[0])
+                else -> java.util.Locale.getDefault()
+            }
+            
+            // Check if we need to change the locale
+            val currentConfig = resources.configuration
+            val currentLocale = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                currentConfig.locales.get(0)
+            } else {
+                @Suppress("DEPRECATION")
+                currentConfig.locale
+            }
+            
+            if (currentLocale == null || 
+                !targetLocale.language.equals(currentLocale.language) ||
+                !targetLocale.country.equals(currentLocale.country)) {
+                
+                // Update the app's locale configuration
+                val config = android.content.res.Configuration(resources.configuration)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                    config.setLocale(targetLocale)
+                } else {
+                    @Suppress("DEPRECATION")
+                    config.locale = targetLocale
+                }
+                
+                // Apply the new configuration
+                @Suppress("DEPRECATION")
+                resources.updateConfiguration(config, resources.displayMetrics)
+                
+                // Also update the default locale for this session
+                java.util.Locale.setDefault(targetLocale)
+                
+                // Show language change dialog instead of immediate recreate
+                showLanguageChangeDialog(targetLocale)
+                
+                com.micoyc.speakthat.InAppLogger.log("MainActivity", 
+                    "Applied saved language: ${targetLocale} (from: $savedLanguage)")
+            }
+        } catch (e: Exception) {
+            com.micoyc.speakthat.InAppLogger.log("MainActivity", 
+                "Error applying saved language: ${e.message}")
+        }
+    }
+    
     private fun configureSystemUI() {
         // Set up proper window insets handling for different Android versions
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             // For Android 11+ (API 30+), use the new window insets API
+            @Suppress("DEPRECATION")
             window.setDecorFitsSystemWindows(true)
         } else {
             // For older versions (Android 10 and below), ensure proper system UI flags
@@ -304,6 +602,15 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     }
     
     private fun initializeTextToSpeech() {
+        textToSpeech = TextToSpeech(this, this)
+    }
+    
+    private fun reinitializeTtsWithCurrentSettings() {
+        // Shutdown existing TTS instance
+        textToSpeech?.shutdown()
+        isTtsInitialized = false
+        
+        // Create new TTS instance with current settings
         textToSpeech = TextToSpeech(this, this)
     }
     
@@ -337,28 +644,113 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             InAppLogger.logTTSEvent("TTS initialized successfully", "MainActivity")
             Log.d(TAG, "TextToSpeech initialized successfully for MainActivity")
         } else {
-            Log.e(TAG, "TextToSpeech initialization failed with status: $status")
-            InAppLogger.logTTSEvent("TTS initialization failed", "Status: $status")
+            val errorMessage = getTtsErrorMessage(status)
+            Log.e(TAG, "TextToSpeech initialization failed with status: $status - $errorMessage")
+            InAppLogger.logTTSEvent("TTS initialization failed", "Status: $status - $errorMessage")
             
             // Log device info for debugging
             val deviceInfo = "Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}, " +
                            "Android: ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})"
             Log.e(TAG, "Device info: $deviceInfo")
-            InAppLogger.logError("MainActivity", "TTS init failed on $deviceInfo")
+            InAppLogger.logError("MainActivity", "TTS init failed on $deviceInfo - $errorMessage")
             
-            // Show user feedback
-            Toast.makeText(this, "TTS initialization failed. Some features may not work.", Toast.LENGTH_LONG).show()
+            // Show appropriate user feedback based on error type
+            showTtsErrorFeedback(status, errorMessage)
+        }
+    }
+    
+    /**
+     * Get a human-readable error message for TTS initialization status codes
+     */
+    private fun getTtsErrorMessage(status: Int): String {
+        return when (status) {
+            TextToSpeech.ERROR -> "TTS engine error"
+            TextToSpeech.ERROR_NOT_INSTALLED_YET -> "TTS engine not installed"
+            TextToSpeech.ERROR_OUTPUT -> "TTS output error"
+            TextToSpeech.ERROR_SERVICE -> "TTS service error"
+            TextToSpeech.ERROR_SYNTHESIS -> "TTS synthesis error"
+            TextToSpeech.ERROR_INVALID_REQUEST -> "Invalid TTS request"
+            TextToSpeech.ERROR_NETWORK -> "TTS network error"
+            TextToSpeech.ERROR_NETWORK_TIMEOUT -> "TTS network timeout"
+            -1 -> if (android.os.Build.VERSION.SDK_INT >= 35) {
+                "TTS service not accessible (Android 15 restriction)"
+            } else {
+                "TTS service not accessible"
+            }
+            else -> "Unknown TTS error (status: $status)"
+        }
+    }
+    
+    /**
+     * Show appropriate user feedback based on TTS error type
+     */
+    private fun showTtsErrorFeedback(status: Int, @Suppress("UNUSED_PARAMETER") errorMessage: String) {
+        val message = when (status) {
+            -1 -> if (android.os.Build.VERSION.SDK_INT >= 35) {
+                getString(R.string.tts_init_failed_android15)
+            } else {
+                getString(R.string.tts_init_failed_service_unavailable)
+            }
+            TextToSpeech.ERROR_NOT_INSTALLED_YET -> getString(R.string.tts_init_failed_service_unavailable)
+            else -> getString(R.string.tts_init_failed_generic)
+        }
+        
+        // Show toast with error message
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        InAppLogger.logUserAction("TTS error toast shown: $message")
+        
+        // For Android 15 and critical errors, show a dialog with troubleshooting info
+        if (android.os.Build.VERSION.SDK_INT >= 35 || status == -1 || status == TextToSpeech.ERROR_NOT_INSTALLED_YET) {
+            showTtsTroubleshootingDialog()
+        }
+    }
+    
+    /**
+     * Show a dialog with TTS troubleshooting information
+     */
+    private fun showTtsTroubleshootingDialog() {
+        try {
+            android.app.AlertDialog.Builder(this)
+                .setTitle(getString(R.string.tts_troubleshooting_title))
+                .setMessage(getString(R.string.tts_troubleshooting_message))
+                .setPositiveButton("OK") { dialog, _ -> 
+                    InAppLogger.logUserAction("TTS troubleshooting dialog dismissed")
+                    dialog.dismiss() 
+                }
+                .setNegativeButton("Settings") { _, _ ->
+                    InAppLogger.logUserAction("TTS troubleshooting dialog - opening accessibility settings")
+                    // Open TTS settings
+                    try {
+                        val intent = android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                        startActivity(intent)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Could not open accessibility settings", e)
+                        InAppLogger.logError("MainActivity", "Could not open accessibility settings: ${e.message}")
+                        Toast.makeText(this, "Could not open settings", Toast.LENGTH_SHORT).show()
+                        InAppLogger.logUserAction("TTS settings access failed - user feedback shown")
+                    }
+                }
+                .show()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error showing TTS troubleshooting dialog", e)
+            InAppLogger.logError("MainActivity", "Error showing TTS troubleshooting dialog: ${e.message}")
+            // Fallback to just showing the toast
+            Toast.makeText(this, getString(R.string.tts_troubleshooting_message), Toast.LENGTH_LONG).show()
+            InAppLogger.logUserAction("TTS troubleshooting dialog fallback - toast shown")
         }
     }
     
     private fun handleLogoClick() {
+        // Trigger the animated logo flashing effect
+        triggerLogoAnimation()
+        
         // Log TTS status for debugging
         val ttsStatus = checkTtsStatus()
         InAppLogger.log("MainActivity", "Logo clicked - $ttsStatus")
         
         // Log wave-to-stop settings for debugging
-        val waveEnabled = sharedPreferences.getBoolean("wave_to_stop_enabled", false)
-        val waveThreshold = sharedPreferences.getFloat("wave_threshold", 3.0f)
+        val waveEnabled = sharedPreferences?.getBoolean(KEY_WAVE_TO_STOP_ENABLED, false) ?: false
+        val waveThreshold = sharedPreferences?.getFloat("wave_threshold", 3.0f) ?: 3.0f
         InAppLogger.log("MainActivity", "Wave-to-stop settings - enabled: $waveEnabled, threshold: ${waveThreshold}cm")
         
         if (!isTtsInitialized) {
@@ -372,7 +764,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             }
             
             // Show user feedback
-            Toast.makeText(this, "TTS not ready. Please try again in a moment.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.main_tts_not_ready), Toast.LENGTH_SHORT).show()
+            InAppLogger.logUserAction("TTS not ready toast shown")
             return
         }
         
@@ -380,20 +773,30 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             // First tap: Play instructional message
             val baseText = "This is SpeakThat! The notification reader. This is how incoming notifications will be announced."
             
-            // Check if shake-to-stop is enabled
-            val isShakeToStopEnabled = sharedPreferences.getBoolean(KEY_SHAKE_TO_STOP_ENABLED, false)
+            // Check if shake-to-stop and wave-to-stop are enabled
+            val isShakeToStopEnabled = sharedPreferences?.getBoolean(KEY_SHAKE_TO_STOP_ENABLED, false) ?: false
+            val isWaveToStopEnabled = sharedPreferences?.getBoolean(KEY_WAVE_TO_STOP_ENABLED, false) ?: false
             
-            val instructionText = if (isShakeToStopEnabled) {
-                "$baseText This is a great opportunity to test your Shake-to-Stop settings. Go ahead and shake your device to stop me talking."
-            } else {
-                baseText
+            val instructionText = when {
+                isShakeToStopEnabled && isWaveToStopEnabled -> {
+                    "$baseText This is a great opportunity to test your Shake-to-Stop and Wave-to-Stop settings. Go ahead and shake your device or wave your hand to stop me talking."
+                }
+                isShakeToStopEnabled -> {
+                    "$baseText This is a great opportunity to test your Shake-to-Stop settings. Go ahead and shake your device to stop me talking."
+                }
+                isWaveToStopEnabled -> {
+                    "$baseText This is a great opportunity to test your Wave-to-Stop settings. Go ahead and wave your hand to stop me talking."
+                }
+                else -> {
+                    baseText
+                }
             }
             
             speakText(instructionText)
             
             // Mark that first tap has occurred
             isFirstLogoTap = false
-            sharedPreferences.edit().putBoolean(KEY_FIRST_LOGO_TAP, false).apply()
+            sharedPreferences?.edit()?.putBoolean(KEY_FIRST_LOGO_TAP, false)?.apply()
             
         } else {
             // Subsequent taps: Play random easter egg (avoiding repeats)
@@ -405,7 +808,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
                     speakText(processedLine)
                     
                     // Store the original line (before processing) to prevent repeats
-                    sharedPreferences.edit().putString(KEY_LAST_EASTER_EGG, selectedLine).apply()
+                    sharedPreferences?.edit()?.putString(KEY_LAST_EASTER_EGG, selectedLine)?.apply()
                     
                     Log.d(TAG, "Playing easter egg: $processedLine")
                 } else {
@@ -428,12 +831,14 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
                     InAppLogger.logTTSEvent("MainActivity TTS started", text.take(50))
                 }
                 
+                @Suppress("DEPRECATION")
                 override fun onDone(utteranceId: String?) {
                     // Stop shake listening when TTS completes
                     stopShakeListening()
                     InAppLogger.logTTSEvent("MainActivity TTS completed", "Easter egg finished")
                 }
                 
+                @Suppress("DEPRECATION")
                 override fun onError(utteranceId: String?) {
                     // Stop shake listening even on error
                     stopShakeListening()
@@ -442,11 +847,48 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
                 }
             })
             
-            val result = textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "easter_egg")
+            // CRITICAL: Apply audio attributes to TTS instance before creating volume bundle
+            // This ensures the audio usage matches what we pass to createVolumeBundle
+            val voiceSettingsPrefs = getSharedPreferences("VoiceSettings", MODE_PRIVATE)
+            val ttsVolume = voiceSettingsPrefs.getFloat("tts_volume", 1.0f)
+            val ttsUsageIndex = voiceSettingsPrefs.getInt("audio_usage", 4) // Default to ASSISTANT index
+            val contentTypeIndex = voiceSettingsPrefs.getInt("content_type", 0) // Default to SPEECH
+            val speakerphoneEnabled = voiceSettingsPrefs.getBoolean("speakerphone_enabled", false)
+            
+            val ttsUsage = when (ttsUsageIndex) {
+                0 -> android.media.AudioAttributes.USAGE_MEDIA
+                1 -> android.media.AudioAttributes.USAGE_NOTIFICATION
+                2 -> android.media.AudioAttributes.USAGE_ALARM
+                3 -> android.media.AudioAttributes.USAGE_VOICE_COMMUNICATION
+                4 -> android.media.AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE
+                else -> android.media.AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE
+            }
+            
+            val contentType = when (contentTypeIndex) {
+                0 -> android.media.AudioAttributes.CONTENT_TYPE_SPEECH
+                1 -> android.media.AudioAttributes.CONTENT_TYPE_MUSIC
+                2 -> android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION
+                3 -> android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION
+                else -> android.media.AudioAttributes.CONTENT_TYPE_SPEECH
+            }
+            
+            // Apply audio attributes to TTS instance
+            val audioAttributes = android.media.AudioAttributes.Builder()
+                .setUsage(ttsUsage)
+                .setContentType(contentType)
+                .build()
+                
+            textToSpeech?.setAudioAttributes(audioAttributes)
+            InAppLogger.log("MainActivity", "Audio attributes applied - Usage: $ttsUsage, Content: $contentType")
+            
+            val volumeParams = VoiceSettingsActivity.createVolumeBundle(ttsVolume, ttsUsage, speakerphoneEnabled)
+            
+            val result = textToSpeech?.speak(text, TextToSpeech.QUEUE_FLUSH, volumeParams, "easter_egg")
             if (result == TextToSpeech.ERROR) {
                 Log.e(TAG, "TTS speak() returned ERROR")
                 InAppLogger.logError("MainActivity", "TTS speak() failed")
-                Toast.makeText(this, "TTS playback failed", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, getString(R.string.main_tts_playback_failed), Toast.LENGTH_SHORT).show()
+                InAppLogger.logUserAction("TTS playback failed toast shown")
             }
         } else {
             Log.e(TAG, "Cannot speak text - TTS not ready. Initialized: $isTtsInitialized, TTS: ${textToSpeech != null}")
@@ -465,18 +907,18 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     }
     
     private fun loadShakeSettings() {
-        isShakeToStopEnabled = sharedPreferences.getBoolean(KEY_SHAKE_TO_STOP_ENABLED, true)
-        shakeThreshold = sharedPreferences.getFloat(KEY_SHAKE_THRESHOLD, 12.0f)
+        isShakeToStopEnabled = sharedPreferences?.getBoolean(KEY_SHAKE_TO_STOP_ENABLED, true) ?: true
+        shakeThreshold = sharedPreferences?.getFloat(KEY_SHAKE_THRESHOLD, 12.0f) ?: 12.0f
         Log.d(TAG, "MainActivity shake settings - enabled: $isShakeToStopEnabled, threshold: $shakeThreshold")
     }
 
     private fun loadWaveSettings() {
-        isWaveToStopEnabled = sharedPreferences.getBoolean("wave_to_stop_enabled", false)
+        isWaveToStopEnabled = sharedPreferences?.getBoolean(KEY_WAVE_TO_STOP_ENABLED, false) ?: false
         // Use calibrated threshold if available, otherwise fall back to old system
-        waveThreshold = if (sharedPreferences.contains("wave_threshold_v1")) {
-            sharedPreferences.getFloat("wave_threshold_v1", 3.0f)
+        waveThreshold = if (sharedPreferences?.contains("wave_threshold_v1") == true) {
+            sharedPreferences?.getFloat("wave_threshold_v1", 3.0f) ?: 3.0f
         } else {
-            sharedPreferences.getFloat("wave_threshold", 3.0f)
+            sharedPreferences?.getFloat("wave_threshold", 3.0f) ?: 3.0f
         }
         Log.d(TAG, "MainActivity wave settings - enabled: $isWaveToStopEnabled, threshold: $waveThreshold")
     }
@@ -562,7 +1004,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             
             if (isTriggered) {
                 val maxRange = proximitySensor?.maximumRange ?: 5.0f
-                val significantChange = maxRange * 0.3f
                 val distanceFromMax = maxRange - proximityValue
                 
                 Log.d(TAG, "Wave detected in MainActivity! Stopping TTS. Proximity: $proximityValue cm, threshold: $waveThreshold cm, maxRange: $maxRange cm, distanceFromMax: $distanceFromMax cm")
@@ -572,7 +1013,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
                 // Log proximity values for debugging (but not too frequently)
                 if (System.currentTimeMillis() % 1000 < 100) { // Log ~10% of the time
                     val maxRange = proximitySensor?.maximumRange ?: 5.0f
-                    val significantChange = maxRange * 0.3f
                     val distanceFromMax = maxRange - proximityValue
                     Log.d(TAG, "Proximity sensor reading: $proximityValue cm (threshold: $waveThreshold cm, maxRange: $maxRange cm, distanceFromMax: $distanceFromMax cm)")
                 }
@@ -637,9 +1077,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     
     private fun getAvailableEasterEggs(): List<String> {
         // Filter easter eggs based on current settings
-        val delayEnabled = sharedPreferences.getInt("delay_before_readout", 0) > 0
-        val shakeEnabled = sharedPreferences.getBoolean(KEY_SHAKE_TO_STOP_ENABLED, false)
-        val waveEnabled = sharedPreferences.getBoolean("wave_to_stop_enabled", false)
+        val delayEnabled = (sharedPreferences?.getInt("delay_before_readout", 2) ?: 2) > 0
+        val shakeEnabled = sharedPreferences?.getBoolean(KEY_SHAKE_TO_STOP_ENABLED, false) ?: false
+        val waveEnabled = sharedPreferences?.getBoolean(KEY_WAVE_TO_STOP_ENABLED, false) ?: false
         
         return easterEggLines.filter { line ->
             when {
@@ -659,7 +1099,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     
     private fun selectNonRepeatingEasterEgg(availableLines: List<String>): String {
         // Get the last spoken easter egg line
-        val lastEasterEgg = sharedPreferences.getString(KEY_LAST_EASTER_EGG, null)
+        val lastEasterEgg = sharedPreferences?.getString(KEY_LAST_EASTER_EGG, null)
         
         // If we only have one line available, or no previous line stored, just pick randomly
         if (availableLines.size <= 1 || lastEasterEgg == null) {
@@ -715,7 +1155,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     }
     
     private fun getCurrentDelayTime(): String {
-        val delaySeconds = sharedPreferences.getInt("delay_before_readout", 0)
+        val delaySeconds = sharedPreferences?.getInt("delay_before_readout", 2) ?: 2
         return when (delaySeconds) {
             0 -> "no delay"
             1 -> "1-second delay"
@@ -749,16 +1189,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         }
     }
     
-    override fun onDestroy() {
-        super.onDestroy()
-        
-        // Unregister voice settings listener
-        voiceSettingsPrefs?.unregisterOnSharedPreferenceChangeListener(voiceSettingsListener)
-        
-        textToSpeech?.shutdown()
-        stopShakeListening()
-    }
-    
     /**
      * Check for updates automatically if enabled in settings
      * This runs silently in the background without user interaction
@@ -766,83 +1196,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     private fun checkForUpdatesIfEnabled() {
         Log.d(TAG, "checkForUpdatesIfEnabled() called")
         
-        // Check if auto-update is enabled
-        val autoUpdateEnabled = sharedPreferences.getBoolean("auto_update_enabled", true)
-        Log.d(TAG, "Auto-update enabled: $autoUpdateEnabled")
-        
-        if (!autoUpdateEnabled) {
-            Log.d(TAG, "Auto-update disabled, skipping update check")
-            return
-        }
-        
-        // Check if enough time has passed since last check
-        val updateManager = UpdateManager.getInstance(this)
-        val shouldCheck = updateManager.shouldCheckForUpdates()
-        Log.d(TAG, "Should check for updates: $shouldCheck")
-        
-        if (!shouldCheck) {
-            Log.d(TAG, "Update check interval not met, skipping update check")
-            return
-        }
-        
-        // Check if we've already notified about the current version
-        val lastCheckedVersion = sharedPreferences.getString("last_checked_version", "")
-        if (lastCheckedVersion != null && updateManager.hasNotifiedAboutVersion(lastCheckedVersion)) {
-            Log.d(TAG, "Already notified about version $lastCheckedVersion, skipping update check")
-            return
-        }
-        
-        // CRITICAL: Check if app was installed from Google Play Store
-        if (updateManager.isInstalledFromGooglePlay()) {
-            Log.i(TAG, "App installed from Google Play Store - GitHub updates disabled")
-            InAppLogger.logSystemEvent("Update check blocked - Google Play installation detected", "MainActivity")
-            
-            // Show Google Play message to user (only once per session)
-            val googlePlayMessageShown = sharedPreferences.getBoolean("google_play_message_shown", false)
-            if (!googlePlayMessageShown) {
-                runOnUiThread {
-                    showGooglePlayUpdateMessage()
-                }
-                // Mark message as shown for this session
-                sharedPreferences.edit().putBoolean("google_play_message_shown", true).apply()
-            }
-            return
-        }
-        
-        // Perform the update check in background
-        lifecycleScope.launch {
-            try {
-                Log.d(TAG, "Performing automatic update check")
-                val updateInfo = updateManager.checkForUpdates()
-                
-                if (updateInfo != null) {
-                    Log.i(TAG, "Update available: ${updateInfo.versionName}")
-                    InAppLogger.logSystemEvent("Update available: ${updateInfo.versionName}", "MainActivity")
-                    
-                    // Show update notification to user
-                    showUpdateNotification(updateInfo)
-                } else {
-                    Log.d(TAG, "No update available")
-                    // Show success toast
-                    runOnUiThread {
-                        Toast.makeText(this@MainActivity, "You're using the latest version!", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error during automatic update check", e)
-                InAppLogger.logSystemEvent("Update check failed: ${e.message}", "MainActivity")
-                
-                // Show error toast
-                runOnUiThread {
-                    val errorMessage = when {
-                        e.message?.contains("network", ignoreCase = true) == true -> "Unable to check for updates! - Network error"
-                        e.message?.contains("timeout", ignoreCase = true) == true -> "Unable to check for updates! - Connection timeout"
-                        else -> "Unable to check for updates! - ${e.message ?: "Unknown error"}"
-                    }
-                    Toast.makeText(this@MainActivity, errorMessage, Toast.LENGTH_LONG).show()
-                }
-            }
-        }
+        // Use the wrapper to handle conditional update checking
+        UpdateFeature.checkForUpdatesIfEnabled(this)
     }
     
     /**
@@ -857,18 +1212,22 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
                 updateInfo.releaseDate
             ))
             .setPositiveButton(getString(R.string.download_update)) { _, _ ->
-                // Start update activity
-                val intent = Intent(this, UpdateActivity::class.java)
-                intent.putExtra("force_check", true)
-                startActivity(intent)
+                InAppLogger.logUserAction("Update dialog - download update button clicked")
+                // Start update activity using wrapper
+                UpdateFeature.startUpdateActivity(this, forceCheck = true)
             }
-            .setNegativeButton(getString(R.string.cancel), null)
+            .setNegativeButton(getString(R.string.cancel)) { _, _ ->
+                InAppLogger.logUserAction("Update dialog - cancel button clicked")
+            }
             .setNeutralButton(getString(R.string.view_release_notes)) { _, _ ->
+                InAppLogger.logUserAction("Update dialog - view release notes button clicked")
                 // Show release notes
                 AlertDialog.Builder(this)
                     .setTitle(getString(R.string.release_notes))
                     .setMessage(updateInfo.releaseNotes.ifEmpty { getString(R.string.no_release_notes) })
-                    .setPositiveButton(getString(R.string.ok), null)
+                    .setPositiveButton(getString(R.string.ok)) { _, _ ->
+                        InAppLogger.logUserAction("Release notes dialog dismissed")
+                    }
                     .show()
             }
             .show()
@@ -883,6 +1242,124 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             bytes < 1024 * 1024 -> "${bytes / 1024} KB"
             bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
             else -> "${bytes / (1024 * 1024 * 1024)} GB"
+        }
+    }
+    
+    /**
+     * Check for crash logs and notify user if available
+     */
+    private fun checkForCrashLogs() {
+        try {
+            if (InAppLogger.hasExternalCrashLogs()) {
+                val crashLogs = InAppLogger.getExternalCrashLogs()
+                if (crashLogs.isNotEmpty()) {
+                    val latestCrash = crashLogs.first()
+                    val crashTime = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(latestCrash.lastModified()))
+                    
+                    // Show notification about crash logs
+                    showCrashLogNotification(crashLogs.size, crashTime)
+                    
+                    InAppLogger.log("CrashLogs", "Found ${crashLogs.size} crash log(s), showing notification")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking for crash logs", e)
+            InAppLogger.logError("CrashLogs", "Error checking for crash logs: ${e.message}")
+        }
+    }
+    
+    /**
+     * Show notification about available crash logs
+     */
+    private fun showCrashLogNotification(crashCount: Int, latestCrashTime: String) {
+        try {
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            
+            // Check notification permission for Android 13+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    Log.w(TAG, "POST_NOTIFICATIONS permission not granted - cannot show crash log notification")
+                    return
+                }
+            }
+            
+            // Create notification channel for Android O+
+            createCrashLogNotificationChannel()
+            
+            // Create intent for opening development settings
+            val openDevSettingsIntent = Intent(this, DevelopmentSettingsActivity::class.java)
+            val openDevSettingsPendingIntent = PendingIntent.getActivity(
+                this, 0, openDevSettingsIntent, 
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            
+            // Create intent for opening file manager to crash logs directory
+            val crashLogsDir = InAppLogger.getExternalCrashLogsDirectory()
+            val openFileManagerIntent = Intent(Intent.ACTION_VIEW).apply {
+                if (crashLogsDir != null) {
+                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                        this@MainActivity,
+                        packageName + ".fileprovider",
+                        java.io.File(crashLogsDir)
+                    )
+                    setDataAndType(uri, "resource/folder")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            }
+            val openFileManagerPendingIntent = PendingIntent.getActivity(
+                this, 1, openFileManagerIntent, 
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            
+            val notification = androidx.core.app.NotificationCompat.Builder(this, "SpeakThat_CrashLogs_Channel")
+                .setContentTitle("SpeakThat! Crash Detected")
+                .setContentText("$crashCount crash log(s) found. Latest: $latestCrashTime")
+                .setSmallIcon(R.drawable.speakthaticon)
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+                .setContentIntent(openDevSettingsPendingIntent)
+                .setAutoCancel(true)
+                .addAction(
+                    R.drawable.speakthaticon,
+                    "View Logs",
+                    openDevSettingsPendingIntent
+                )
+                .addAction(
+                    R.drawable.speakthaticon,
+                    "Open Folder",
+                    openFileManagerPendingIntent
+                )
+                .build()
+            
+            // Show notification with unique ID
+            notificationManager.notify(2001, notification)
+            Log.d(TAG, "Crash log notification shown")
+            InAppLogger.log("CrashLogs", "Crash log notification shown for $crashCount crash(es)")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error showing crash log notification", e)
+            InAppLogger.logError("CrashLogs", "Error showing crash log notification: ${e.message}")
+        }
+    }
+    
+    /**
+     * Create notification channel for crash log notifications
+     */
+    private fun createCrashLogNotificationChannel() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            
+            val channel = android.app.NotificationChannel(
+                "SpeakThat_CrashLogs_Channel",
+                "SpeakThat! Crash Logs",
+                android.app.NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Notifications about SpeakThat! crash logs"
+                enableLights(true)
+                lightColor = android.graphics.Color.RED
+                enableVibration(true)
+            }
+            
+            notificationManager.createNotificationChannel(channel)
         }
     }
     
@@ -921,4 +1398,159 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         Log.i(TAG, "Showed Google Play update message to user")
         InAppLogger.logSystemEvent("Google Play update message shown to user", "MainActivity")
     }
+    
+    /**
+     * Show repository update message to users who installed from F-Droid/IzzyOnDroid
+     * This explains why GitHub updates are disabled and directs them to their repository
+     */
+    private fun showRepositoryUpdateMessage() {
+        AlertDialog.Builder(this)
+            .setTitle("Updates via Repository")
+            .setMessage("You installed SpeakThat from a repository (F-Droid, IzzyOnDroid, etc.). " +
+                "For security and to maintain the repository's screening process, automatic updates are handled through your repository.\n\n" +
+                "To update the app, please use your repository's update system (F-Droid, IzzyOnDroid client, etc.).\n\n" +
+                "This ensures you receive updates that have been screened and verified by the repository maintainers.")
+            .setPositiveButton("OK", null)
+            .setCancelable(true)
+            .show()
+        
+        Log.i(TAG, "Showed repository update message to user")
+        InAppLogger.logSystemEvent("Repository update message shown to user", "MainActivity")
+    }
+    
+    /**
+     * Request notification permission for Android 13+ when needed
+     * This is called when user enables notification features
+     */
+    fun requestNotificationPermissionIfNeeded(): Boolean {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                Log.d(TAG, "Requesting POST_NOTIFICATIONS permission")
+                InAppLogger.log("Permissions", "Requesting POST_NOTIFICATIONS permission")
+                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATION_PERMISSION)
+                return false // Permission not yet granted
+            } else {
+                Log.d(TAG, "POST_NOTIFICATIONS permission already granted")
+                InAppLogger.log("Permissions", "POST_NOTIFICATIONS permission already granted")
+                return true // Permission already granted
+            }
+        }
+        return true // No permission needed for older Android versions
+    }
+    
+    /**
+     * Check if notification permission is granted
+     */
+    fun isNotificationPermissionGranted(): Boolean {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        } else {
+            true // No permission needed for older Android versions
+        }
+    }
+    
+    /**
+     * Show language change dialog with options for user
+     */
+    private fun showLanguageChangeDialog(newLocale: java.util.Locale) {
+        val languageName = newLocale.getDisplayLanguage(newLocale)
+        val currentLanguageName = java.util.Locale.getDefault().getDisplayLanguage(java.util.Locale.getDefault())
+        
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.dialog_title_language_changed))
+            .setMessage(getString(R.string.dialog_message_language_changed, currentLanguageName, languageName))
+            .setPositiveButton(getString(R.string.button_restart_app)) { _, _ ->
+                // Restart the entire app to ensure all components use new language
+                restartApp()
+            }
+            .setNegativeButton(getString(R.string.button_apply_now)) { _, _ ->
+                // Just recreate current activity
+                recreate()
+            }
+            .setNeutralButton(getString(R.string.button_later)) { _, _ ->
+                // Do nothing - user can manually restart later
+                InAppLogger.logUserAction("Language change dialog - later button clicked")
+                Toast.makeText(this, getString(R.string.toast_language_manual_restart), Toast.LENGTH_SHORT).show()
+                InAppLogger.logUserAction("Language manual restart toast shown")
+            }
+            .setCancelable(false)
+            .show()
+        
+        InAppLogger.log("MainActivity", "Language change dialog shown: $currentLanguageName → $languageName")
+    }
+    
+    /**
+     * Restart the entire app to ensure all components use the new language
+     */
+    private fun restartApp() {
+        try {
+            // Create intent to restart the app
+            val intent = packageManager.getLaunchIntentForPackage(packageName)
+            intent?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+            
+            // Show a brief message
+            Toast.makeText(this, getString(R.string.toast_language_restarting), Toast.LENGTH_SHORT).show()
+            InAppLogger.logUserAction("Language restarting toast shown")
+            
+            // Start the new instance and finish current one
+            startActivity(intent)
+            finish()
+            
+            InAppLogger.log("MainActivity", "App restart initiated for language change")
+        } catch (e: Exception) {
+            InAppLogger.logError("MainActivity", "Failed to restart app: ${e.message}")
+            // Fallback to recreate if restart fails
+            recreate()
+        }
+    }
+    
+    /**
+     * Handle permission request results
+     */
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        
+        when (requestCode) {
+            REQUEST_NOTIFICATION_PERMISSION -> {
+                if (grantResults.isNotEmpty() && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                    Log.d(TAG, "POST_NOTIFICATIONS permission granted")
+                    InAppLogger.log("Permissions", "POST_NOTIFICATIONS permission granted")
+                    Toast.makeText(this, getString(R.string.main_notification_permission_granted), Toast.LENGTH_SHORT).show()
+                    InAppLogger.logUserAction("Notification permission granted toast shown")
+                } else {
+                    Log.w(TAG, "POST_NOTIFICATIONS permission denied")
+                    InAppLogger.log("Permissions", "POST_NOTIFICATIONS permission denied")
+                    Toast.makeText(this, getString(R.string.main_notification_permission_denied), Toast.LENGTH_LONG).show()
+                    InAppLogger.logUserAction("Notification permission denied toast shown")
+                }
+            }
+        }
+    }
+    
+    /**
+     * Initialize review reminder and track app session
+     */
+    private fun initializeReviewReminder() {
+        val reviewManager = ReviewReminderManager.getInstance(this)
+        
+        // Track this app session
+        reviewManager.incrementAppSession()
+        
+        // Check if we should show the reminder (with a small delay to avoid showing immediately)
+        Handler(Looper.getMainLooper()).postDelayed({
+            if (reviewManager.shouldShowReminder()) {
+                reviewManager.showReminderDialog()
+            }
+        }, 2000) // 2 second delay to let the app settle
+    }
+    
+    /**
+     * Track notification read for review reminder
+     * This should be called when a notification is successfully read aloud
+     */
+    fun trackNotificationRead() {
+        val reviewManager = ReviewReminderManager.getInstance(this)
+        reviewManager.incrementNotificationsRead()
+    }
+
 } 

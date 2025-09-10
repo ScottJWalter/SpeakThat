@@ -70,16 +70,26 @@ public class FilterConfigManager {
     public static class VoiceConfig {
         public float speechRate;
         public float pitch;
+        public float ttsVolume;
         public String voiceName;
         public String language;
+        public String ttsLanguage;        // NEW: TTS-specific language setting
+        public String languagePreset;    // NEW: Selected language preset ID
+        public boolean isCustomPreset;   // NEW: Whether settings represent a custom preset
+        public boolean advancedEnabled;  // NEW: Whether advanced options are enabled
         public int audioUsage;
         public int contentType;
         
         public VoiceConfig() {
             this.speechRate = 1.0f;
             this.pitch = 1.0f;
+            this.ttsVolume = 1.0f;
             this.voiceName = "";
             this.language = "en_US";
+            this.ttsLanguage = "system";     // Default TTS language
+            this.languagePreset = "en_US";   // Default preset
+            this.isCustomPreset = false;     // Not custom by default
+            this.advancedEnabled = false;    // Advanced options off by default
             this.audioUsage = 0;
             this.contentType = 0;
         }
@@ -93,8 +103,13 @@ public class FilterConfigManager {
         public int shakeTimeoutSeconds;
         public String mediaBehavior;
         public int duckingVolume;
+        public String duckingFallbackStrategy;
         public int delayBeforeReadout;
         public boolean honourDoNotDisturb;
+        public boolean honourPhoneCalls; // Add honour phone calls setting
+        public boolean honourAudioMode; // Add honour audio mode setting
+        public boolean persistentNotification; // Add persistent notification setting
+        public boolean notificationWhileReading; // Add notification while reading setting
         public boolean waveToStopEnabled;
         public int waveTimeoutSeconds;
         public boolean pocketModeEnabled;
@@ -110,8 +125,13 @@ public class FilterConfigManager {
             this.shakeTimeoutSeconds = 30;
             this.mediaBehavior = "ignore";
             this.duckingVolume = 30;
+            this.duckingFallbackStrategy = "manual";
             this.delayBeforeReadout = 0;
             this.honourDoNotDisturb = true;
+            this.honourPhoneCalls = true; // Default to true for safety
+            this.honourAudioMode = true; // Default to true for safety
+            this.persistentNotification = false; // Default to false
+            this.notificationWhileReading = false; // Default to false
             this.waveToStopEnabled = false;
             this.waveTimeoutSeconds = 30;
             this.pocketModeEnabled = false;
@@ -212,8 +232,13 @@ public class FilterConfigManager {
         // Load voice settings
         config.voice.speechRate = voicePrefs.getFloat("speech_rate", 1.0f);
         config.voice.pitch = voicePrefs.getFloat("pitch", 1.0f);
+        config.voice.ttsVolume = voicePrefs.getFloat("tts_volume", 1.0f);
         config.voice.voiceName = voicePrefs.getString("voice_name", "");
         config.voice.language = voicePrefs.getString("language", "en_US");
+        config.voice.ttsLanguage = voicePrefs.getString("tts_language", "system");        // NEW
+        config.voice.languagePreset = voicePrefs.getString("language_preset", "en_US");  // NEW
+        config.voice.isCustomPreset = voicePrefs.getBoolean("is_custom_preset", false);  // NEW
+        config.voice.advancedEnabled = voicePrefs.getBoolean("show_advanced_voice", false); // NEW
         config.voice.audioUsage = voicePrefs.getInt("audio_usage", 0);
         config.voice.contentType = voicePrefs.getInt("content_type", 0);
         
@@ -225,8 +250,13 @@ public class FilterConfigManager {
         config.behavior.shakeTimeoutSeconds = prefs.getInt("shake_timeout_seconds", 30);
         config.behavior.mediaBehavior = prefs.getString("media_behavior", "ignore");
         config.behavior.duckingVolume = prefs.getInt("ducking_volume", 30);
+        config.behavior.duckingFallbackStrategy = prefs.getString("ducking_fallback_strategy", "manual");
         config.behavior.delayBeforeReadout = prefs.getInt("delay_before_readout", 0);
         config.behavior.honourDoNotDisturb = prefs.getBoolean("honour_do_not_disturb", true);
+        config.behavior.honourPhoneCalls = prefs.getBoolean("honour_phone_calls", true); // Add honour phone calls
+        config.behavior.honourAudioMode = prefs.getBoolean("honour_audio_mode", true); // Add honour audio mode
+        config.behavior.persistentNotification = prefs.getBoolean("persistent_notification", false); // Add persistent notification
+        config.behavior.notificationWhileReading = prefs.getBoolean("notification_while_reading", false); // Add notification while reading
         config.behavior.waveToStopEnabled = prefs.getBoolean("wave_to_stop_enabled", false);
         config.behavior.waveTimeoutSeconds = prefs.getInt("wave_timeout_seconds", 30);
         config.behavior.pocketModeEnabled = prefs.getBoolean("pocket_mode_enabled", false);
@@ -266,8 +296,13 @@ public class FilterConfigManager {
         JSONObject voice = new JSONObject();
         voice.put("speechRate", config.voice.speechRate);
         voice.put("pitch", config.voice.pitch);
+        voice.put("ttsVolume", config.voice.ttsVolume);
         voice.put("voiceName", config.voice.voiceName);
         voice.put("language", config.voice.language);
+        voice.put("ttsLanguage", config.voice.ttsLanguage);           // NEW
+        voice.put("languagePreset", config.voice.languagePreset);   // NEW
+        voice.put("isCustomPreset", config.voice.isCustomPreset);   // NEW
+        voice.put("advancedEnabled", config.voice.advancedEnabled); // NEW
         voice.put("audioUsage", config.voice.audioUsage);
         voice.put("contentType", config.voice.contentType);
         json.put("voice", voice);
@@ -281,8 +316,13 @@ public class FilterConfigManager {
         behavior.put("shakeTimeoutSeconds", config.behavior.shakeTimeoutSeconds);
         behavior.put("mediaBehavior", config.behavior.mediaBehavior);
         behavior.put("duckingVolume", config.behavior.duckingVolume);
+        behavior.put("duckingFallbackStrategy", config.behavior.duckingFallbackStrategy);
         behavior.put("delayBeforeReadout", config.behavior.delayBeforeReadout);
         behavior.put("honourDoNotDisturb", config.behavior.honourDoNotDisturb);
+        behavior.put("honourPhoneCalls", config.behavior.honourPhoneCalls); // Add honour phone calls
+        behavior.put("honourAudioMode", config.behavior.honourAudioMode); // Add honour audio mode
+        behavior.put("persistentNotification", config.behavior.persistentNotification); // Add persistent notification
+        behavior.put("notificationWhileReading", config.behavior.notificationWhileReading); // Add notification while reading
         behavior.put("waveToStopEnabled", config.behavior.waveToStopEnabled);
         behavior.put("waveTimeoutSeconds", config.behavior.waveTimeoutSeconds);
         behavior.put("pocketModeEnabled", config.behavior.pocketModeEnabled);
@@ -477,6 +517,11 @@ public class FilterConfigManager {
                     totalImported++;
                 }
                 
+                if (voice.has("ttsVolume")) {
+                    voiceEditor.putFloat("tts_volume", (float) voice.getDouble("ttsVolume"));
+                    totalImported++;
+                }
+                
                 if (voice.has("voiceName")) {
                     voiceEditor.putString("voice_name", voice.getString("voiceName"));
                     totalImported++;
@@ -494,6 +539,40 @@ public class FilterConfigManager {
                 
                 if (voice.has("contentType")) {
                     voiceEditor.putInt("content_type", voice.getInt("contentType"));
+                    totalImported++;
+                }
+                
+                // NEW PRESET FIELDS (with backwards compatibility)
+                if (voice.has("ttsLanguage")) {
+                    voiceEditor.putString("tts_language", voice.getString("ttsLanguage"));
+                    totalImported++;
+                }
+                
+                if (voice.has("languagePreset")) {
+                    voiceEditor.putString("language_preset", voice.getString("languagePreset"));
+                    totalImported++;
+                } else {
+                    // Backwards compatibility: If no preset is specified, try to detect from language setting
+                    if (voice.has("language")) {
+                        String language = voice.getString("language");
+                        String ttsLanguage = voice.optString("ttsLanguage", "system");
+                        String voiceName = voice.optString("voiceName", "");
+                        
+                        // Use LanguagePresetManager to find best matching preset
+                        // This will be applied after preferences are saved
+                        voiceEditor.putString("_legacy_import_language", language);
+                        voiceEditor.putString("_legacy_import_tts_language", ttsLanguage);
+                        voiceEditor.putString("_legacy_import_voice_name", voiceName);
+                    }
+                }
+                
+                if (voice.has("isCustomPreset")) {
+                    voiceEditor.putBoolean("is_custom_preset", voice.getBoolean("isCustomPreset"));
+                    totalImported++;
+                }
+                
+                if (voice.has("advancedEnabled")) {
+                    voiceEditor.putBoolean("show_advanced_voice", voice.getBoolean("advancedEnabled"));
                     totalImported++;
                 }
             }
@@ -544,6 +623,11 @@ public class FilterConfigManager {
                     totalImported++;
                 }
                 
+                if (behavior.has("duckingFallbackStrategy")) {
+                    mainEditor.putString("ducking_fallback_strategy", behavior.getString("duckingFallbackStrategy"));
+                    totalImported++;
+                }
+                
                 if (behavior.has("delayBeforeReadout")) {
                     mainEditor.putInt("delay_before_readout", behavior.getInt("delayBeforeReadout"));
                     totalImported++;
@@ -551,6 +635,26 @@ public class FilterConfigManager {
                 
                 if (behavior.has("honourDoNotDisturb")) {
                     mainEditor.putBoolean("honour_do_not_disturb", behavior.getBoolean("honourDoNotDisturb"));
+                    totalImported++;
+                }
+                
+                if (behavior.has("honourPhoneCalls")) {
+                    mainEditor.putBoolean("honour_phone_calls", behavior.getBoolean("honourPhoneCalls"));
+                    totalImported++;
+                }
+                
+                if (behavior.has("honourAudioMode")) {
+                    mainEditor.putBoolean("honour_audio_mode", behavior.getBoolean("honourAudioMode"));
+                    totalImported++;
+                }
+                
+                if (behavior.has("persistentNotification")) {
+                    mainEditor.putBoolean("persistent_notification", behavior.getBoolean("persistentNotification"));
+                    totalImported++;
+                }
+                
+                if (behavior.has("notificationWhileReading")) {
+                    mainEditor.putBoolean("notification_while_reading", behavior.getBoolean("notificationWhileReading"));
                     totalImported++;
                 }
                 
@@ -625,6 +729,9 @@ public class FilterConfigManager {
             mainEditor.apply();
             voiceEditor.apply();
             
+            // Handle legacy import preset migration
+            processLegacyImportPresets(context);
+            
             // Log the import
             InAppLogger.log("FilterConfig", "Imported " + totalImported + " settings from full configuration");
             
@@ -690,5 +797,41 @@ public class FilterConfigManager {
         // For now, all 1.x versions are compatible
         // In the future, we can add more sophisticated version checking
         return version.startsWith("1.");
+    }
+    
+    /**
+     * Process legacy import settings and migrate them to the new preset system
+     */
+    private static void processLegacyImportPresets(Context context) {
+        SharedPreferences voicePrefs = context.getSharedPreferences("VoiceSettings", Context.MODE_PRIVATE);
+        
+        // Check if we have legacy import markers
+        if (voicePrefs.contains("_legacy_import_language")) {
+            String language = voicePrefs.getString("_legacy_import_language", "en_US");
+            String ttsLanguage = voicePrefs.getString("_legacy_import_tts_language", "system");
+            String voiceName = voicePrefs.getString("_legacy_import_voice_name", "");
+            
+            InAppLogger.log("FilterConfig", "Processing legacy import - Language: " + language + 
+                           ", TTS: " + ttsLanguage + ", Voice: " + voiceName);
+            
+            // Use LanguagePresetManager to find the best matching preset
+            LanguagePresetManager.LanguagePreset bestMatch = 
+                LanguagePresetManager.findBestMatch(language, ttsLanguage, voiceName);
+            
+            // Save the detected preset
+            SharedPreferences.Editor editor = voicePrefs.edit();
+            editor.putString("language_preset", bestMatch.id);
+            editor.putBoolean("is_custom_preset", bestMatch.isCustom);
+            
+            // Clean up the legacy markers
+            editor.remove("_legacy_import_language");
+            editor.remove("_legacy_import_tts_language");
+            editor.remove("_legacy_import_voice_name");
+            
+            editor.apply();
+            
+            InAppLogger.log("FilterConfig", "Legacy import migrated to preset: " + bestMatch.displayName + 
+                           " (custom: " + bestMatch.isCustom + ")");
+        }
     }
 } 

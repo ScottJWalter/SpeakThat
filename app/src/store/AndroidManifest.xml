@@ -1,0 +1,18 @@
+<?xml version="1.1" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Store variant: Internet permission kept for network voice downloads -->
+    <!-- All other permissions from main manifest are inherited automatically -->
+    
+    <!-- Note: INTERNET permission is now included for network voice downloads -->
+    <!-- This allows users to download network voices when selected -->
+    <!-- 
+    Store variant permission policy:
+    - INTERNET: Kept for network voice downloads (legitimate TTS feature)
+    - No auto-updater: Updates handled by app stores
+    - No online icons: Uses local fallback icons only
+    - No network libraries: Excludes OkHttp and Coil
+    -->
+
+</manifest> 

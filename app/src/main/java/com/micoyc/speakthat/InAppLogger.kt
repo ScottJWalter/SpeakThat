@@ -10,6 +10,7 @@ import java.util.*
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.system.exitProcess
 
+
 object InAppLogger {
     private val logs = CopyOnWriteArrayList<LogEntry>()
     private const val MAX_LOGS = 500 // Keep last 500 log entries
@@ -100,37 +101,60 @@ object InAppLogger {
     private fun saveCrashLog(exception: Throwable, thread: Thread) {
         appContext?.let { context ->
             try {
+                val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+                val timestampForFilename = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault()).format(Date())
+                
+                // Create comprehensive crash log content
+                val crashLogContent = buildString {
+                    appendLine("SpeakThat! Crash Report")
+                    appendLine("Generated: $timestamp")
+                    appendLine("App Version: ${getAppVersionInfo(context)}")
+                    appendLine("Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+                    appendLine("Android Version: ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})")
+                    appendLine("===========================================")
+                    appendLine()
+                    appendLine("=== CRASH DETAILS ===")
+                    appendLine("Thread: ${thread.name}")
+                    appendLine("Exception: ${exception.javaClass.simpleName}")
+                    appendLine("Message: ${exception.message}")
+                    appendLine("Stack Trace:")
+                    exception.stackTrace.forEach { element ->
+                        appendLine("  at $element")
+                    }
+                    appendLine()
+                    appendLine("=== APP LOGS AT CRASH ===")
+                    appendLine(getAllLogs())
+                    appendLine("=== END CRASH LOG ===")
+                }
+                
+                // Save to internal storage (existing behavior)
                 val logsDir = File(context.filesDir, "logs")
                 if (!logsDir.exists()) {
                     logsDir.mkdirs()
                 }
                 
-                val crashFile = File(logsDir, CRASH_LOG_FILENAME)
-                val writer = FileWriter(crashFile, true) // Append mode
+                val internalCrashFile = File(logsDir, CRASH_LOG_FILENAME)
+                val internalWriter = FileWriter(internalCrashFile, true) // Append mode
+                internalWriter.write("\n$crashLogContent\n")
+                internalWriter.close()
                 
-                val timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
+                // Also save to external storage for easy user access
+                val externalCrashFilename = "SpeakThat_Crash_$timestampForFilename.txt"
+                val externalFile = FileExportHelper.createExportFile(context, "crashes", externalCrashFilename, crashLogContent)
                 
-                writer.write("\n=== CRASH LOG - $timestamp ===\n")
-                writer.write("Thread: ${thread.name}\n")
-                writer.write("Exception: ${exception.javaClass.simpleName}\n")
-                writer.write("Message: ${exception.message}\n")
-                writer.write("Stack Trace:\n")
-                
-                exception.stackTrace.forEach { element ->
-                    writer.write("  at $element\n")
+                if (externalFile != null) {
+                    // Log success for debugging
+                    Log.i("SpeakThat_CrashHandler", "Crash log exported to external storage: ${externalFile.absolutePath}")
+                } else {
+                    Log.w("SpeakThat_CrashHandler", "Failed to export crash log to external storage, but internal log saved")
                 }
-                
-                writer.write("\n=== APP LOGS AT CRASH ===\n")
-                writer.write(getAllLogs())
-                writer.write("\n=== END CRASH LOG ===\n\n")
-                
-                writer.close()
                 
             } catch (e: IOException) {
                 Log.e("SpeakThat_CrashHandler", "Failed to write crash log", e)
             }
         }
     }
+    
     
     private fun savePersistentLogs() {
         appContext?.let { context ->
@@ -223,18 +247,53 @@ object InAppLogger {
     fun clearCrashLogs() {
         appContext?.let { context ->
             try {
+                // Clear internal crash logs
                 val logsDir = File(context.filesDir, "logs")
                 val crashFile = File(logsDir, CRASH_LOG_FILENAME)
                 
                 if (crashFile.exists()) {
                     crashFile.delete()
-                    log("Logger", "Crash logs cleared")
+                    log("Logger", "Internal crash logs cleared")
                 }
+                
+                // Clear external crash logs
+                clearExternalCrashLogs()
+                
             } catch (e: IOException) {
                 Log.e("SpeakThat_CrashLogs", "Failed to clear crash logs", e)
             }
             Unit // Explicit return value for let block
         }
+    }
+    
+    @JvmStatic
+    fun clearExternalCrashLogs(): Boolean {
+        return appContext?.let { context ->
+            try {
+                val externalDir = context.getExternalFilesDir(null)
+                if (externalDir != null) {
+                    val crashesDir = File(externalDir, "crashes")
+                    if (crashesDir.exists()) {
+                        val crashFiles = crashesDir.listFiles()?.filter { it.isFile && it.name.startsWith("SpeakThat_Crash_") }
+                        var deletedCount = 0
+                        crashFiles?.forEach { file ->
+                            if (file.delete()) {
+                                deletedCount++
+                            }
+                        }
+                        log("Logger", "External crash logs cleared: $deletedCount files deleted")
+                        deletedCount > 0
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            } catch (e: Exception) {
+                Log.e("SpeakThat_CrashLogs", "Failed to clear external crash logs", e)
+                false
+            }
+        } ?: false
     }
     
     @JvmStatic
@@ -244,6 +303,61 @@ object InAppLogger {
             val crashFile = File(logsDir, CRASH_LOG_FILENAME)
             crashFile.exists() && crashFile.length() > 0
         } ?: false
+    }
+    
+    @JvmStatic
+    fun hasExternalCrashLogs(): Boolean {
+        return appContext?.let { context ->
+            try {
+                val externalDir = context.getExternalFilesDir(null)
+                if (externalDir != null) {
+                    val crashesDir = File(externalDir, "crashes")
+                    crashesDir.exists() && crashesDir.listFiles()?.isNotEmpty() == true
+                } else {
+                    false
+                }
+            } catch (e: Exception) {
+                false
+            }
+        } ?: false
+    }
+    
+    @JvmStatic
+    fun getExternalCrashLogs(): List<File> {
+        return appContext?.let { context ->
+            try {
+                val externalDir = context.getExternalFilesDir(null)
+                if (externalDir != null) {
+                    val crashesDir = File(externalDir, "crashes")
+                    if (crashesDir.exists()) {
+                        crashesDir.listFiles()?.filter { it.isFile && it.name.startsWith("SpeakThat_Crash_") }?.sortedByDescending { it.lastModified() } ?: emptyList()
+                    } else {
+                        emptyList()
+                    }
+                } else {
+                    emptyList()
+                }
+            } catch (e: Exception) {
+                emptyList()
+            }
+        } ?: emptyList()
+    }
+    
+    @JvmStatic
+    fun getExternalCrashLogsDirectory(): String? {
+        return appContext?.let { context ->
+            try {
+                val externalDir = context.getExternalFilesDir(null)
+                if (externalDir != null) {
+                    val crashesDir = File(externalDir, "crashes")
+                    crashesDir.absolutePath
+                } else {
+                    null
+                }
+            } catch (e: Exception) {
+                null
+            }
+        }
     }
     
     @JvmStatic
@@ -449,12 +563,71 @@ object InAppLogger {
     }
     
     @JvmStatic
-    fun getSystemInfo(): String {
+    @Suppress("DEPRECATION")
+    fun getInstallationSource(context: android.content.Context): String {
+        return try {
+            val installerPackageName = context.packageManager.getInstallerPackageName(context.packageName)
+            
+            when {
+                installerPackageName == "com.android.vending" -> "Google Play Store"
+                installerPackageName == "com.amazon.venezia" -> "Amazon Appstore"
+                installerPackageName == "com.samsung.android.galaxy.store" -> "Samsung Galaxy Store"
+                installerPackageName == "com.huawei.appmarket" -> "Huawei AppGallery"
+                installerPackageName == "com.sec.android.app.samsungapps" -> "Samsung Galaxy Store (Legacy)"
+                installerPackageName == "com.xiaomi.mipicks" -> "Xiaomi GetApps"
+                installerPackageName == "com.oppo.market" -> "OPPO App Market"
+                installerPackageName == "com.vivo.appstore" -> "vivo App Store"
+                installerPackageName == "com.oneplus.filemanager" -> "OnePlus App Store"
+                installerPackageName == "com.mi.globalbrowser" -> "Mi Browser"
+                installerPackageName == "com.android.packageinstaller" -> "Direct APK Installation"
+                installerPackageName == "com.google.android.packageinstaller" -> "Direct APK Installation"
+                installerPackageName == null -> "Unknown/Manual Installation"
+                else -> "Other Store: $installerPackageName"
+            }
+        } catch (e: Exception) {
+            "Unknown/Error detecting source"
+        }
+    }
+    
+    @JvmStatic
+    @Suppress("DEPRECATION")
+    fun getAppVersionInfo(context: android.content.Context): String {
+        return try {
+            val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+            val versionName = packageInfo.versionName
+            val versionCode = packageInfo.versionCode // Use versionCode instead of longVersionCode for API compatibility
+            
+            // Get build variant information
+            val buildVariant = when {
+                BuildConfig.DISTRIBUTION_CHANNEL == "github" -> "GitHub"
+                BuildConfig.DISTRIBUTION_CHANNEL == "store" -> "Store"
+                else -> "Unknown"
+            }
+            
+            "SpeakThat! v$versionName ($buildVariant) (Build $versionCode)"
+        } catch (e: Exception) {
+            "SpeakThat! (Version Unknown)"
+        }
+    }
+    
+    @JvmStatic
+    fun getBuildVariantInfo(): String {
+        return when {
+            BuildConfig.DISTRIBUTION_CHANNEL == "github" -> "GitHub"
+            BuildConfig.DISTRIBUTION_CHANNEL == "store" -> "Store"
+            else -> "Unknown"
+        }
+    }
+    
+    @JvmStatic
+    fun getSystemInfo(context: android.content.Context): String {
         return """
             |=== SYSTEM INFORMATION ===
             |Android Version: ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})
             |Device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}
-            |App Version: SpeakThat! (Debug Build)
+            |App Version: ${getAppVersionInfo(context)}
+            |Build Variant: ${getBuildVariantInfo()}
+            |Installation Source: ${getInstallationSource(context)}
             |Logging Settings: Verbose=$verboseMode, Filters=$logFilters, Notifications=$logNotifications, UserActions=$logUserActions, SystemEvents=$logSystemEvents, Sensitive=$logSensitiveData
             |Total Log Entries: ${logs.size}
             |Crash Logs Available: ${hasCrashLogs()}

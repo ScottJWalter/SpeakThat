@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="8dp"
+    app:cardCornerRadius="8dp"
+    app:cardElevation="0dp"
+    app:cardBackgroundColor="@android:color/transparent"
+    app:strokeWidth="0dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_advanced_voice_section">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/textActionType"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/item_action_control"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@color/purple_card_text_primary" />
+
+            <TextView
+                android:id="@+id/textActionDetails"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/item_action_disable"
+                android:textSize="12sp"
+                android:textColor="@color/purple_card_text_secondary"
+                android:layout_marginTop="2dp" />
+
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/buttonEditAction"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:src="@drawable/ic_edit"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Edit action"
+            app:tint="@color/white_100"
+            android:layout_marginEnd="8dp" />
+
+        <ImageButton
+            android:id="@+id/buttonRemoveAction"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:src="@drawable/ic_delete_24"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Remove action"
+            app:tint="@color/white_100" />
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView> 
