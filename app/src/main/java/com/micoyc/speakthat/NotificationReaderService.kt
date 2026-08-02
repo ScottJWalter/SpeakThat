@@ -83,6 +83,7 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
     private var currentAppName = ""
     private var currentOriginalAppName = "" // Store original app name for statistics (before privacy modification)
     private var currentTtsText = ""
+    private var currentSbnKey: String? = null
     private var shouldShowEngineFailureWarning = false
     
     // Cached system services for performance
@@ -103,6 +104,9 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
     private var urlReplacementText = DEFAULT_URL_REPLACEMENT_TEXT
     private var tidySpeechRemoveEmojisEnabled = false
     private var tidySpeechForceLowercaseEnabled = false
+    private var separateDigitsEnabled = false
+    private var digitThreshold = 5
+    private var separatorType = "Space"
     private var emojiExceptionsList: List<String> = emptyList()
     private var filterEmptyTextEnabled = false
     private var contentCapMode = DEFAULT_CONTENT_CAP_MODE
@@ -145,6 +149,9 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
     private var lastWaveDebugLogTime = 0L
     private var waveNoEventRunnable: Runnable? = null
     private var pendingWaveTriggerRunnable: Runnable? = null
+
+    // Broadcast to Stop (DIY external abort while reading)
+    private var isBroadcastToStopReceiverRegistered = false
     
     // Media behavior settings
     private var originalMusicVolume = -1 // Store original volume for restoration
@@ -414,6 +421,9 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
         private const val KEY_URL_REPLACEMENT_TEXT = "url_replacement_text"
         private const val KEY_TIDY_SPEECH_REMOVE_EMOJIS = "tidy_speech_remove_emojis"
         private const val KEY_TIDY_SPEECH_FORCE_LOWERCASE = "tidy_speech_force_lowercase"
+        private const val KEY_SEPARATE_DIGITS_ENABLED = "separate_digits_enabled"
+        private const val KEY_DIGIT_THRESHOLD = "digit_threshold"
+        private const val KEY_SEPARATOR_TYPE = "separator_type"
         private const val KEY_PREF_EMOJI_EXCEPTIONS = "pref_emoji_exceptions"
         private const val KEY_FILTER_EMPTY_TEXT = "filter_empty_text"
         private const val DEFAULT_URL_HANDLING_MODE = "domain_only"
@@ -619,7 +629,8 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
         val voiceOverride: VoiceOverride? = null,
         val contentCapOverride: ContentCapOverride? = null,
         val processedBlocks: Map<String, String>? = null, // Support the new architecture
-        val shouldKeepEmojis: Boolean = false
+        val shouldKeepEmojis: Boolean = false,
+        val shouldKeepDigits: Boolean = false
     )
     
     private lateinit var androidAutoHelper: com.micoyc.speakthat.utils.AndroidAutoHelper
@@ -832,6 +843,7 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
             // Unregister broadcast receivers
             unregisterAccessibilityBroadcastReceiver()
             unregisterTestFiltersBroadcastReceiver()
+            unregisterBroadcastToStopReceiver()
             cancelSpeakThatClockAlarm()
             unregisterClockAlarmReceiver()
             unregisterClockReceiver()
@@ -925,6 +937,49 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
             Log.d(TAG, "Test filters broadcast receiver unregistered")
         } catch (e: Exception) {
             Log.e(TAG, "Error unregistering test filters broadcast receiver", e)
+        }
+    }
+
+    private fun registerBroadcastToStopReceiver() {
+        if (isBroadcastToStopReceiverRegistered) {
+            return
+        }
+        if (!BroadcastToStop.isEnabled(this)) {
+            return
+        }
+        val secret = BroadcastToStop.getSecret(this)
+        if (secret.isEmpty()) {
+            Log.d(TAG, "Broadcast to Stop enabled but secret missing - not registering")
+            return
+        }
+        try {
+            val filter = android.content.IntentFilter(BroadcastToStop.ACTION_ABORT_READING)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(broadcastToStopReceiver, filter, Context.RECEIVER_EXPORTED)
+            } else {
+                registerReceiver(broadcastToStopReceiver, filter)
+            }
+            isBroadcastToStopReceiverRegistered = true
+            Log.d(TAG, "Broadcast to Stop receiver registered (TTS active)")
+            InAppLogger.logSystemEvent("Broadcast to Stop listening", "TTS playback active")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error registering Broadcast to Stop receiver", e)
+            InAppLogger.logError("Service", "Error registering Broadcast to Stop receiver: ${e.message}")
+        }
+    }
+
+    private fun unregisterBroadcastToStopReceiver() {
+        if (!isBroadcastToStopReceiverRegistered) {
+            return
+        }
+        try {
+            unregisterReceiver(broadcastToStopReceiver)
+            Log.d(TAG, "Broadcast to Stop receiver unregistered")
+            InAppLogger.logSystemEvent("Broadcast to Stop stopped", "TTS playback finished")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unregistering Broadcast to Stop receiver", e)
+        } finally {
+            isBroadcastToStopReceiverRegistered = false
         }
     }
 
@@ -1235,6 +1290,32 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
                     Log.d(TAG, "Unknown accessibility broadcast action: ${intent?.action}")
                 }
             }
+        }
+    }
+
+    private val broadcastToStopReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+            if (intent?.action != BroadcastToStop.ACTION_ABORT_READING) {
+                return
+            }
+            if (!isCurrentlySpeaking) {
+                Log.d(TAG, "Broadcast to Stop ignored - not currently speaking")
+                return
+            }
+            if (!BroadcastToStop.isEnabled(this@NotificationReaderService)) {
+                Log.d(TAG, "Broadcast to Stop ignored - feature disabled")
+                return
+            }
+            val expectedSecret = BroadcastToStop.getSecret(this@NotificationReaderService)
+            val providedSecret = intent.getStringExtra(BroadcastToStop.EXTRA_SECRET)
+            if (!BroadcastToStop.secretsMatch(expectedSecret, providedSecret)) {
+                Log.d(TAG, "Broadcast to Stop ignored - missing or invalid secret")
+                InAppLogger.log("Service", "Broadcast to Stop rejected - invalid secret")
+                return
+            }
+            Log.d(TAG, "Broadcast to Stop accepted - aborting readout")
+            InAppLogger.log("Service", "Broadcast to Stop accepted - aborting readout")
+            stopSpeaking("broadcast")
         }
     }
 
@@ -1901,8 +1982,63 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
         }
     }
     
+    override fun onNotificationRemoved(sbn: StatusBarNotification, rankingMap: RankingMap, reason: Int) {
+        super.onNotificationRemoved(sbn, rankingMap, reason)
+        
+        // Handle TTS cancellation if the dismissed notification is currently being read
+        if (sbn.key == currentSbnKey) {
+            val swipeToStopEnabled = sharedPreferences?.getBoolean("pref_swip_to_stop", true) ?: true
+            if (swipeToStopEnabled) {
+                val watchException = sharedPreferences?.getBoolean("pref_stop_on_dismissal_watch_exception", false) ?: false
+                val autoCancelEnabled = sharedPreferences?.getBoolean("pref_stop_on_dismissal_auto_cancel", false) ?: false
+                
+                var shouldStop = false
+                var stopReasonStr = ""
+                
+                when (reason) {
+                    REASON_CANCEL, REASON_CLICK, REASON_CANCEL_ALL, REASON_GROUP_SUMMARY_CANCELED -> {
+                        // Always counts as a user dismissal
+                        shouldStop = true
+                        stopReasonStr = "user dismissal (reason=$reason)"
+                    }
+                    REASON_LISTENER_CANCEL, REASON_LISTENER_CANCEL_ALL -> {
+                        // Smartwatch/companion dismissal
+                        if (!watchException) {
+                            shouldStop = true
+                            stopReasonStr = "watch/companion dismissal (reason=$reason)"
+                        } else {
+                            Log.d(TAG, "Ignoring watch dismissal due to watch exception preference")
+                        }
+                    }
+                    REASON_APP_CANCEL -> {
+                        // Auto-cancel
+                        if (autoCancelEnabled) {
+                            shouldStop = true
+                            stopReasonStr = "app auto-cancel (reason=$reason)"
+                        } else {
+                            Log.d(TAG, "Ignoring app auto-cancel due to preference")
+                        }
+                    }
+                }
+                
+                if (shouldStop) {
+                    InAppLogger.log("Service", "Stopping readout due to notification dismissal: $stopReasonStr")
+                    Log.d(TAG, "Stopping readout due to notification dismissal: $stopReasonStr")
+                    stopSpeaking("notification dismissal")
+                }
+            }
+        }
+        
+        // Forward to the legacy method to handle dismissal memory tracking
+        handleNotificationRemovedLegacy(sbn)
+    }
+
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         super.onNotificationRemoved(sbn)
+        handleNotificationRemovedLegacy(sbn)
+    }
+
+    private fun handleNotificationRemovedLegacy(sbn: StatusBarNotification) {
         
         try {
             // Skip our own notifications
@@ -3140,6 +3276,12 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
         waveNoEventRunnable = null
         pendingWaveTriggerRunnable?.let { sensorTimeoutHandler?.removeCallbacks(it) }
         pendingWaveTriggerRunnable = null
+
+        // Sensor timeout can call this while TTS is still active; only drop the DIY
+        // abort receiver when the readout itself has ended.
+        if (!isCurrentlySpeaking) {
+            unregisterBroadcastToStopReceiver()
+        }
         
         // Log sensor state for debugging
         Log.d(TAG, "Sensor unregistration complete - shake enabled: $isShakeToStopEnabled, wave enabled: $isWaveToStopEnabled")
@@ -3259,6 +3401,9 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
         // Load tidy speech settings
         tidySpeechRemoveEmojisEnabled = sharedPreferences?.getBoolean(KEY_TIDY_SPEECH_REMOVE_EMOJIS, false) ?: false
         tidySpeechForceLowercaseEnabled = sharedPreferences?.getBoolean(KEY_TIDY_SPEECH_FORCE_LOWERCASE, false) ?: false
+        separateDigitsEnabled = sharedPreferences?.getBoolean(KEY_SEPARATE_DIGITS_ENABLED, false) ?: false
+        digitThreshold = sharedPreferences?.getInt(KEY_DIGIT_THRESHOLD, 5) ?: 5
+        separatorType = sharedPreferences?.getString(KEY_SEPARATOR_TYPE, "Space") ?: "Space"
         val emojiExceptionsRaw = sharedPreferences?.getString(KEY_PREF_EMOJI_EXCEPTIONS, "") ?: ""
         emojiExceptionsList = emojiExceptionsRaw.split(",")
             .map { it.trim() }
@@ -3336,7 +3481,8 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
         val voiceOverride: VoiceOverride? = null,
         val contentCapOverride: ContentCapOverride? = null,
         val processedBlocks: Map<String, String>? = null,
-        val shouldKeepEmojis: Boolean = false
+        val shouldKeepEmojis: Boolean = false,
+        val shouldKeepDigits: Boolean = false
     )
 
     data class SpeechTemplateOverride(
@@ -3424,6 +3570,11 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
         val emojiOverride = effects.filterIsInstance<com.micoyc.speakthat.rules.Effect.OverrideEmojiRemoval>().lastOrNull()
         if (emojiOverride != null) {
             notificationContext.shouldKeepEmojis = true
+        }
+
+        val separateDigitsOverride = effects.filterIsInstance<com.micoyc.speakthat.rules.Effect.OverrideSeparateDigits>().lastOrNull()
+        if (separateDigitsOverride != null) {
+            notificationContext.shouldKeepDigits = true
         }
 
         if (!isSummary && effects.any { it is com.micoyc.speakthat.rules.Effect.SkipNotification }) {
@@ -3516,7 +3667,11 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
             val effectiveSentenceCount = contentCapOverride?.sentenceCount ?: contentCapSentenceCount
             val effectiveTimeLimit = contentCapOverride?.timeLimit ?: contentCapTimeLimit
             
-            var cappedCompiledText = applyContentCap(
+            if (isSelfTest && effectiveContentCapMode != "disabled") {
+                InAppLogger.log("SelfTest", "Bypassing Content Cap for SelfTest notification")
+            }
+            
+            var cappedCompiledText = if (isSelfTest) compiledText else applyContentCap(
                 compiledText, 
                 effectiveContentCapMode, 
                 effectiveWordCount, 
@@ -3570,7 +3725,11 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
         val effectiveSentenceCount = contentCapOverride?.sentenceCount ?: contentCapSentenceCount
         val effectiveTimeLimit = contentCapOverride?.timeLimit ?: contentCapTimeLimit
         
-        var cappedCompiledText = applyContentCap(
+        if (isSelfTest && effectiveContentCapMode != "disabled") {
+            InAppLogger.log("SelfTest", "Bypassing Content Cap for SelfTest notification")
+        }
+        
+        var cappedCompiledText = if (isSelfTest) compiledText else applyContentCap(
             compiledText, 
             effectiveContentCapMode, 
             effectiveWordCount, 
@@ -3820,6 +3979,30 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
             }
         }
         return removeSpokenEmojis(text)
+    }
+
+    private fun applySeparateDigitsIfEnabled(text: String, shouldKeepDigits: Boolean): String {
+        if (!separateDigitsEnabled) return text
+        if (shouldKeepDigits) {
+            InAppLogger.logFilter("Digits kept together due to Rule Engine action")
+            return text
+        }
+
+        val separatorStr = when (separatorType) {
+            "Comma" -> ", "
+            "Period" -> ". "
+            else -> " "
+        }
+
+        // Regex to find contiguous blocks of digits meeting the threshold
+        val regex = Regex("\\d{$digitThreshold,}")
+        return regex.replace(text) { matchResult ->
+            val numberStr = matchResult.value
+            val separated = numberStr.toCharArray().joinToString(separatorStr)
+            Log.d(TAG, "Separated digits: $numberStr -> $separated")
+            InAppLogger.logFilter("Separated digits: $numberStr -> $separated")
+            separated
+        }
     }
 
     private fun shouldFilterEmojiEmptyText(
@@ -4489,30 +4672,6 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
     }
     
     private fun stopSpeaking(triggerType: String = "unknown") {
-        // Track interruption if currently speaking
-        val wasSpeaking = isCurrentlySpeaking
-        if (wasSpeaking) {
-            try {
-                StatisticsManager.getInstance(this).incrementReadoutsInterrupted()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error tracking readout interruption", e)
-            }
-        }
-        
-        textToSpeech?.stop()
-        releaseSpeechWakeLock()
-        isCurrentlySpeaking = false
-        restoreGlobalVoiceSettingsIfNeeded("manual stop")
-        
-        // Clear current notification variables
-        currentSpeechText = ""
-        currentAppName = ""
-        currentOriginalAppName = ""
-        currentTtsText = ""
-        
-        // Unregister shake listener since we're no longer speaking
-        unregisterShakeListener()
-        
         // Clear any queued notifications since user wants to stop
         notificationQueue.clear()
         
@@ -4523,27 +4682,10 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
             Log.d(TAG, "Cancelled pending delayed readout due to $triggerType")
         }
 
-        cancelSpeechSafetyTimeout("stopSpeaking:$triggerType")
+        textToSpeech?.stop()
         
-        // Disable speakerphone if it was enabled
-        try {
-            if (isSpeakerphoneEnabled(audioManager)) {
-                setSpeakerphoneEnabled(audioManager, false)
-                InAppLogger.log("Service", "Speakerphone disabled after stopping speech")
-            }
-        } catch (e: Exception) {
-            InAppLogger.logError("Service", "Failed to disable speakerphone: ${e.message}")
-        }
-        
-        // Clean up media behavior effects
-        cleanupMediaBehavior()
-        
-        // Reading notification is now integrated into foreground notification
-        // hideReadingNotification()
-        
-        // CRITICAL: Stop foreground service when TTS is manually stopped
-        // This ensures the foreground service notification is properly removed
-        stopForegroundService()
+        // Use the centralized teardown method to ensure SCO and media are properly cleaned up
+        applyReadoutInterruptionTeardown("stopSpeaking:$triggerType", null, countInterrupted = true, resumeQueue = false)
         
         Log.d(TAG, "TTS stopped due to $triggerType")
         InAppLogger.logTTSEvent("TTS stopped by $triggerType", "User interrupted speech")
@@ -4554,37 +4696,11 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
      * Used internally by audio focus handlers.
      */
     private fun stopCurrentSpeech() {
-        // Track interruption if currently speaking
-        val wasSpeaking = isCurrentlySpeaking
-        if (wasSpeaking) {
-            try {
-                StatisticsManager.getInstance(this).incrementReadoutsInterrupted()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error tracking readout interruption", e)
-            }
-        }
-        
         textToSpeech?.stop()
-        isCurrentlySpeaking = false
-        restoreGlobalVoiceSettingsIfNeeded("audio focus stop")
         
-        // Clear current notification variables
-        currentSpeechText = ""
-        currentAppName = ""
-        currentOriginalAppName = ""
-        currentTtsText = ""
-        unregisterShakeListener()
-
-        cancelSpeechSafetyTimeout("stopCurrentSpeech")
-        
-        // CRITICAL: Stop foreground service when TTS is interrupted
-        stopForegroundService()
-        
-        // Clean up media behavior effects
-        cleanupMediaBehavior()
-        
-        // Reading notification is now integrated into foreground notification
-        // hideReadingNotification()
+        // Use the centralized teardown method to ensure SCO and media are properly cleaned up
+        // We do NOT resume the queue here because this is used when audio focus is permanently lost
+        applyReadoutInterruptionTeardown("audio focus stop", null, countInterrupted = true, resumeQueue = false)
         
         Log.d(TAG, "Current TTS speech stopped by audio focus change")
         InAppLogger.logTTSEvent("TTS stopped by audio focus", "Focus loss interrupted speech")
@@ -4674,7 +4790,7 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
         currentAppName = ""
         currentOriginalAppName = ""
         currentTtsText = ""
-
+        currentSbnKey = null
         stopForegroundService()
         unregisterShakeListener()
 
@@ -6542,7 +6658,7 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
         when (notificationBehavior) {
             "interrupt" -> {
                 Log.d(TAG, "INTERRUPT mode: Speaking immediately and interrupting any current speech")
-                speakNotificationImmediate(appName, text, conditionalDelaySeconds, sbn, originalAppName, speechTemplateOverride, voiceOverride, queuedNotification.contentCapOverride, queuedNotification.processedBlocks, true, queuedNotification.shouldKeepEmojis)
+                speakNotificationImmediate(appName, text, conditionalDelaySeconds, sbn, originalAppName, speechTemplateOverride, voiceOverride, queuedNotification.contentCapOverride, queuedNotification.processedBlocks, true, queuedNotification.shouldKeepEmojis, queuedNotification.shouldKeepDigits)
             }
             "queue" -> {
                 Log.d(TAG, "QUEUE mode: Adding to queue")
@@ -6553,7 +6669,7 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
             "skip" -> {
                 if (!isCurrentlySpeaking) {
                     Log.d(TAG, "SKIP mode: Not currently speaking, will speak now")
-                    speakNotificationImmediate(appName, text, conditionalDelaySeconds, sbn, originalAppName, speechTemplateOverride, voiceOverride, queuedNotification.contentCapOverride, queuedNotification.processedBlocks, true, queuedNotification.shouldKeepEmojis)
+                    speakNotificationImmediate(appName, text, conditionalDelaySeconds, sbn, originalAppName, speechTemplateOverride, voiceOverride, queuedNotification.contentCapOverride, queuedNotification.processedBlocks, true, queuedNotification.shouldKeepEmojis, queuedNotification.shouldKeepDigits)
                 } else {
                     Log.d(TAG, "SKIP mode: Currently speaking, skipping notification from $appName")
                     // Track filter reason
@@ -6567,7 +6683,7 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
             "smart" -> {
                 if (isPriorityApp) {
                     Log.d(TAG, "SMART mode: Priority app $appName - interrupting")
-                    speakNotificationImmediate(appName, text, conditionalDelaySeconds, sbn, originalAppName, speechTemplateOverride, voiceOverride, queuedNotification.contentCapOverride, queuedNotification.processedBlocks, true, queuedNotification.shouldKeepEmojis)
+                    speakNotificationImmediate(appName, text, conditionalDelaySeconds, sbn, originalAppName, speechTemplateOverride, voiceOverride, queuedNotification.contentCapOverride, queuedNotification.processedBlocks, true, queuedNotification.shouldKeepEmojis, queuedNotification.shouldKeepDigits)
                 } else {
                     Log.d(TAG, "SMART mode: Regular app $appName - adding to queue")
                     notificationQueue.add(queuedNotification)
@@ -6576,7 +6692,7 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
             }
             else -> {
                 Log.d(TAG, "UNKNOWN mode '$notificationBehavior': Defaulting to interrupt")
-                speakNotificationImmediate(appName, text, conditionalDelaySeconds, sbn, originalAppName, speechTemplateOverride, voiceOverride, queuedNotification.contentCapOverride, queuedNotification.processedBlocks, true, queuedNotification.shouldKeepEmojis)
+                speakNotificationImmediate(appName, text, conditionalDelaySeconds, sbn, originalAppName, speechTemplateOverride, voiceOverride, queuedNotification.contentCapOverride, queuedNotification.processedBlocks, true, queuedNotification.shouldKeepEmojis, queuedNotification.shouldKeepDigits)
             }
         }
     }
@@ -6626,7 +6742,8 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
                 queuedNotification.contentCapOverride,
                 queuedNotification.processedBlocks,
                 ttsFlushIncoming = false,
-                shouldKeepEmojis = queuedNotification.shouldKeepEmojis
+                shouldKeepEmojis = queuedNotification.shouldKeepEmojis,
+                shouldKeepDigits = queuedNotification.shouldKeepDigits
             )
         } else if (isCurrentlySpeaking) {
             Log.d(TAG, "Still speaking, queue will be processed when current speech finishes")
@@ -6646,7 +6763,8 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
         contentCapOverride: ContentCapOverride? = null,
         processedBlocks: Map<String, String>? = null,
         ttsFlushIncoming: Boolean = true,
-        shouldKeepEmojis: Boolean = false
+        shouldKeepEmojis: Boolean = false,
+        shouldKeepDigits: Boolean = false
     ) {
         if (!isTtsInitialized || textToSpeech == null) {
             Log.w(TAG, "TTS not initialized, cannot speak notification")
@@ -6672,7 +6790,8 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
 
         val collapsedSpeechText = collapseRepeatedNotificationPrefix(speechText)
         lastFullNotificationSpeechText = speechText
-        val tidySpeechText = applyEmojiRemovalIfEnabled(collapsedSpeechText, shouldKeepEmojis)
+        var tidySpeechText = applyEmojiRemovalIfEnabled(collapsedSpeechText, shouldKeepEmojis)
+        tidySpeechText = applySeparateDigitsIfEnabled(tidySpeechText, shouldKeepDigits)
         
         // Determine which delay to use (conditional delay overrides global delay)
         val effectiveDelay = if (conditionalDelaySeconds > 0) {
@@ -6695,7 +6814,8 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
             originalAppName,
             voiceOverride,
             delayMs = delayMs,
-            ttsFlushIncoming = ttsFlushIncoming
+            ttsFlushIncoming = ttsFlushIncoming,
+            sbn = sbn
         )
     }
     
@@ -6706,7 +6826,8 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
         originalAppName: String? = null,
         voiceOverride: VoiceOverride? = null,
         delayMs: Long = 0L,
-        ttsFlushIncoming: Boolean = true
+        ttsFlushIncoming: Boolean = true,
+        sbn: StatusBarNotification? = null
     ) {
         if (SpeechCoordinator.isSummaryActive()) {
             Log.d(TAG, "Summary active - refusing notification speech at executeSpeech")
@@ -6862,6 +6983,7 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
         }
         
         isCurrentlySpeaking = true
+        currentSbnKey = sbn?.key
         
         // Set the current app name and text for the reading notification
         currentAppName = appName
@@ -6891,6 +7013,7 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
         
         // Register shake listener now that we're about to speak
         registerShakeListener()
+        registerBroadcastToStopReceiver()
         
         // Create volume bundle with proper volume parameters
         val ttsVolume = minOf(1.0f, voiceSettingsPrefs.getFloat("tts_volume", 1.0f))
@@ -6969,7 +7092,13 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
                 Log.d(TAG, "=== DUCKING DEBUG: TTS started - Music volume: $currentVolume/$maxVolume ===")
                 InAppLogger.log("Service", "=== DUCKING DEBUG: TTS started - Music volume: $currentVolume/$maxVolume ===")
 
-                if (contentCapMode == "time" && contentCapTimeLimit > 0) {
+                val isSelfTest = sbn?.notification?.extras?.getBoolean(SelfTestHelper.EXTRA_IS_SELFTEST, false) ?: false
+                if (isSelfTest && contentCapMode == "time" && contentCapTimeLimit > 0) {
+                    Log.d(TAG, "SelfTest bypass - skipping Content Cap time limit")
+                    InAppLogger.log("SelfTest", "Bypassing Content Cap time limit for SelfTest notification")
+                }
+                
+                if (!isSelfTest && contentCapMode == "time" && contentCapTimeLimit > 0) {
                     contentCapTimerRunnable = Runnable {
                         Log.d(TAG, "Content Cap time limit reached (${contentCapTimeLimit}s) - stopping TTS")
                         InAppLogger.log("Service", "Content Cap time limit reached (${contentCapTimeLimit}s) - stopping TTS")
@@ -6987,6 +7116,7 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
                         releaseSpeechWakeLock()
 
                         isCurrentlySpeaking = false
+                        currentSbnKey = null
                         contentCapTimerRunnable = null
                         cancelSpeechSafetyTimeout("content cap")
                         restoreGlobalVoiceSettingsIfNeeded("content cap stop")
@@ -7013,6 +7143,7 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
                 InAppLogger.log("Service", "=== DUCKING DEBUG: TTS utterance COMPLETED: $utteranceId ===")
                 releaseSpeechWakeLock()
                 isCurrentlySpeaking = false
+                currentSbnKey = null
                 cancelSpeechSafetyTimeout("utterance_done")
 
                 contentCapTimerRunnable?.let { runnable ->
@@ -7060,6 +7191,7 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
                 Log.e(TAG, "TTS utterance error: $utteranceId")
                 releaseSpeechWakeLock()
                 isCurrentlySpeaking = false
+                currentSbnKey = null
                 cancelSpeechSafetyTimeout("utterance_error")
 
                 contentCapTimerRunnable?.let { runnable ->
@@ -7130,6 +7262,7 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
                 Log.e(TAG, "TTS stop during JIT suppression", e)
             }
             isCurrentlySpeaking = false
+            currentSbnKey = null
             restoreGlobalVoiceSettingsIfNeeded("JIT global suppression: $jitSuppressReason")
             releaseSpeechWakeLock()
             unregisterShakeListener()
@@ -7151,6 +7284,7 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
                 Log.e(TAG, "TTS stop during JIT suppression", e)
             }
             isCurrentlySpeaking = false
+            currentSbnKey = null
             restoreGlobalVoiceSettingsIfNeeded("JIT global suppression: No speakable text remaining")
             releaseSpeechWakeLock()
             unregisterShakeListener()
@@ -7246,6 +7380,7 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
                     InAppLogger.logError("Service", "TTS.speak() returned ERROR - attempting recovery")
                     attemptTtsRecovery("speak() returned ERROR")
                     isCurrentlySpeaking = false
+                    currentSbnKey = null
                     unregisterShakeListener()
                     restoreGlobalVoiceSettingsIfNeeded("speak() error")
                     releaseSpeechWakeLock()
@@ -7567,6 +7702,21 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
                 tidySpeechForceLowercaseEnabled = sharedPreferences?.getBoolean(KEY_TIDY_SPEECH_FORCE_LOWERCASE, false) ?: false
                 Log.d(TAG, "Tidy speech setting updated: forceLowercase=$tidySpeechForceLowercaseEnabled")
                 InAppLogger.log("Service", "Tidy speech setting updated: forceLowercase=$tidySpeechForceLowercaseEnabled")
+            }
+            KEY_SEPARATE_DIGITS_ENABLED -> {
+                separateDigitsEnabled = sharedPreferences?.getBoolean(KEY_SEPARATE_DIGITS_ENABLED, false) ?: false
+                Log.d(TAG, "Separate digits setting updated: enabled=$separateDigitsEnabled")
+                InAppLogger.log("Service", "Separate digits setting updated: enabled=$separateDigitsEnabled")
+            }
+            KEY_DIGIT_THRESHOLD -> {
+                digitThreshold = sharedPreferences?.getInt(KEY_DIGIT_THRESHOLD, 5) ?: 5
+                Log.d(TAG, "Separate digits threshold updated: $digitThreshold")
+                InAppLogger.log("Service", "Separate digits threshold updated: $digitThreshold")
+            }
+            KEY_SEPARATOR_TYPE -> {
+                separatorType = sharedPreferences?.getString(KEY_SEPARATOR_TYPE, "Space") ?: "Space"
+                Log.d(TAG, "Separate digits separator updated: $separatorType")
+                InAppLogger.log("Service", "Separate digits separator updated: $separatorType")
             }
             KEY_FILTER_EMPTY_TEXT -> {
                 filterEmptyTextEnabled = sharedPreferences?.getBoolean(KEY_FILTER_EMPTY_TEXT, false) ?: false
@@ -8314,25 +8464,14 @@ class NotificationReaderService : NotificationListenerService(), TextToSpeech.On
      */
     private fun stopTts() {
         try {
-            // Stop current TTS
-            textToSpeech?.stop()
-            isCurrentlySpeaking = false
-            currentSpeechText = ""
-            currentAppName = ""
-            currentTtsText = ""
-            
             // Clear notification queue
             notificationQueue.clear()
             
-            // Reading notification is now integrated into foreground notification
-            // hideReadingNotification()
+            // Stop current TTS
+            textToSpeech?.stop()
             
-            // CRITICAL: Clean up media behavior effects (resume paused media)
-            cleanupMediaBehavior()
-            
-            // CRITICAL: Stop foreground service when TTS is manually stopped
-            // This ensures the foreground service notification is properly removed
-            stopForegroundService()
+            // Use the centralized teardown method to ensure SCO and media are properly cleaned up
+            applyReadoutInterruptionTeardown("notification action", null, countInterrupted = true, resumeQueue = false)
             
             Log.d(TAG, "TTS stopped via notification action")
             InAppLogger.log("Notifications", "TTS stopped via notification action")

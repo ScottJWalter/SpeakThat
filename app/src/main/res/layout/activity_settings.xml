@@ -17,20 +17,18 @@
         android:padding="16dp"
         android:background="?attr/colorSurface">
 
-        <LinearLayout
+        <FrameLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:layout_height="wrap_content">
 
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/searchInputLayout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 app:startIconDrawable="@drawable/ic_search_24"
-                app:startIconTint="@color/purple_200"
-                app:boxStrokeColor="@color/purple_200"
-                app:hintTextColor="@color/purple_200"
+                app:startIconTint="@color/white_100"
+                app:boxStrokeColor="@color/white_100"
+                app:hintTextColor="@color/white_100"
                 style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
 
                 <com.google.android.material.textfield.TextInputEditText
@@ -38,14 +36,27 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:hint="@string/search_settings_hint"
-                    android:textColor="@color/text_primary"
-                    android:inputType="text"
                     android:imeOptions="actionSearch"
-                    android:maxLines="1" />
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:textColor="@color/text_primary"
+                    android:textColorLink="@color/white_100"
+                    android:textCursorDrawable="@null" />
 
             </com.google.android.material.textfield.TextInputLayout>
 
-        </LinearLayout>
+            <ProgressBar
+                android:id="@+id/searchProgressBar"
+                style="?android:attr/progressBarStyleSmall"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="end|center_vertical"
+                android:layout_marginEnd="16dp"
+                android:indeterminate="true"
+                android:visibility="gone"
+                android:indeterminateTint="@color/white_100" />
+
+        </FrameLayout>
 
         <!-- Search Results Container -->
         <androidx.recyclerview.widget.RecyclerView
@@ -54,8 +65,8 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:visibility="gone"
-            android:background="@drawable/search_results_background"
-            android:padding="8dp" />
+            android:clipToPadding="false"
+            android:paddingBottom="8dp" />
 
     </LinearLayout>
 
@@ -167,8 +178,8 @@
                         android:layout_height="24dp"
                         android:layout_marginEnd="16dp"
                         android:src="@drawable/ic_voice_selection_24"
-                        android:tint="@color/white_100"
-                        android:contentDescription="@string/settings_voice_title" />
+                        android:contentDescription="@string/settings_voice_title"
+                        app:tint="@color/white_100" />
 
                     <LinearLayout
                         android:layout_width="0dp"

@@ -984,6 +984,13 @@ This feature is especially useful for accessibility, desk users, and anyone who 
     <string name="tidy_speech_remove_emojis_description">Remove emojis and other symbols from spoken notifications</string>
     <string name="tidy_speech_force_lowercase_title">Force lowercase</string>
     <string name="tidy_speech_force_lowercase_description">Convert all text to lowercase before reading to prevent the TTS engine from spelling out capitalised words</string>
+    <string name="tidy_speech_separate_digits_title">Separate digits</string>
+    <string name="tidy_speech_separate_digits_description">Separate long numbers to prevent the TTS engine from reading them as a single large value</string>
+    <string name="tidy_speech_separate_digits_threshold_title">Minimum digits</string>
+    <string name="tidy_speech_separate_digits_separator_title">Separator</string>
+    <string name="separator_space">Space</string>
+    <string name="separator_comma">Comma</string>
+    <string name="separator_period">Period</string>
     <string name="emoji_exceptions_hint">Keep emojis if text contains (comma separated):</string>
     <string name="filter_empty_text_title">Filter empty text</string>
     <string name="filter_empty_text_description">Don\'t read the notification if the text is empty after emoji removal</string>
@@ -1833,6 +1840,14 @@ This permission is completely optional; SpeakThat! will still function without i
 
     <string name="behavior_wave_to_stop_title">Wave to Stop</string>
     <string name="behavior_wave_to_stop_description">Stop readouts instantly by waving your hand in front of the device</string>
+    
+    <!-- Swipe to Stop Feature Strings -->
+    <string name="behavior_swipe_to_stop_title">Swipe to Stop</string>
+    <string name="behavior_swipe_to_stop_description">Cancels the readout early if you dismiss the notification. This can be also be used to discreetly stop readouts from your smartwatch.</string>
+    <string name="behavior_swipe_to_stop_watch_exception_title">Keep reading if dismissed from a watch</string>
+    <string name="behavior_swipe_to_stop_watch_exception_description">Allows you to clear the notification from your smartwatch screen without interrupting the phone\'s audio readout.</string>
+    <string name="behavior_swipe_to_stop_auto_cancel_title">Stop if the app auto-cancels the notification</string>
+    <string name="behavior_swipe_to_stop_auto_cancel_description">Silences SpeakThat if the app that sent the notification automatically removes it (e.g., background syncs or automated systems).</string>
     <string name="behavior_great_for">Great for: Desk users &amp; accessibility</string>
     <string name="behavior_enable_wave_stop">Enable wave to stop</string>
     <string name="behavior_proximity_threshold">Proximity Threshold</string>
@@ -1840,6 +1855,8 @@ This permission is completely optional; SpeakThat! will still function without i
     <!-- Content Cap Feature Strings -->
     <string name="action_override_content_cap_title">Override Content Cap</string>
     <string name="action_override_content_cap_description">Enable or disable content cap for this notification</string>
+    <string name="action_override_separate_digits_title">Keep Digits Together</string>
+    <string name="action_override_separate_digits_description">Do not separate long numbers for this notification</string>
     <string name="rule_action_override_content_cap">override content cap</string>
     <string name="action_override_emoji_removal_title">Keep Emojis</string>
     <string name="action_override_emoji_removal_description">Do not strip emojis from this notification</string>
@@ -1861,6 +1878,17 @@ This permission is completely optional; SpeakThat! will still function without i
     <!-- Major Missing Section Titles -->
     <string name="behavior_custom_app_names_title">Custom App Names</string>
     <string name="dev_logging_configuration_title">Logging Configuration</string>
+    <string name="dev_broadcast_to_stop_title" translatable="false">Broadcast to Stop</string>
+    <string name="dev_broadcast_to_stop_description" translatable="false">Receive broadcast intents from other apps to abort readouts.</string>
+    <string name="dev_broadcast_to_stop_enable" translatable="false">Enable Broadcast to Stop</string>
+    <string name="dev_broadcast_to_stop_note" translatable="false">Tap a row to copy the value. Send an explicit broadcast with the secret extra while SpeakThat is reading.</string>
+    <string name="dev_broadcast_to_stop_action_label" translatable="false">Action</string>
+    <string name="dev_broadcast_to_stop_package_label" translatable="false">Package name</string>
+    <string name="dev_broadcast_to_stop_extra_label" translatable="false">Secret extra name</string>
+    <string name="dev_broadcast_to_stop_secret_label" translatable="false">Secret value</string>
+    <string name="dev_broadcast_to_stop_regenerate" translatable="false">Regenerate secret</string>
+    <string name="dev_broadcast_to_stop_copied" translatable="false">%1$s copied to clipboard</string>
+    <string name="dev_broadcast_to_stop_secret_regenerated" translatable="false">Secret regenerated</string>
     <string name="filter_word_swap_title">Word Swap</string>
     <string name="filter_word_swaps_header">Word Swaps</string>
     <string name="voice_language_preset_title">Language Preset</string>
@@ -2651,4 +2679,5 @@ This permission is completely optional; SpeakThat! will still function without i
     <string name="summary_settings_visual_mode_title">Visual Mode</string>
     <string name="summary_settings_visual_mode_subtitle">Show summary cards on screen</string>
     <string name="summary_settings_audio_only_subtitle">Audio-only mode enabled. No overlay permission required.</string>
+    <string name="tidy_speech_separate_digits_threshold_description">Set the minimum required number of consecutive digits for separation to be applied.</string>
 </resources>

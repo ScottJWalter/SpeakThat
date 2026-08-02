@@ -1702,6 +1702,176 @@
 
             </com.google.android.material.card.MaterialCardView>
 
+            <!-- Swipe to Stop Section -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/swipeToStopCard"
+                android:visibility="visible"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="4dp"
+                app:cardBackgroundColor="@android:color/transparent"
+                app:strokeWidth="0dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp"
+                    android:background="@drawable/gradient_card_subtle_right">
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="12dp">
+
+                        <ImageView
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:layout_marginEnd="16dp"
+                            android:src="@drawable/ic_swipe_24"
+                            app:tint="@color/white_100"
+                            android:contentDescription="Swipe to Stop" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/behavior_swipe_to_stop_title"
+                            android:textSize="20sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/purple_card_text_primary" />
+
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/behavior_swipe_to_stop_description"
+                        android:textSize="14sp"
+                        android:textColor="@color/purple_card_text_secondary"
+                        android:layout_marginBottom="16dp" />
+
+                    <!-- Swipe to Stop Toggle -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="12dp">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/behavior_swipe_to_stop_title"
+                            android:textSize="16sp"
+                            android:textColor="@color/white_100" />
+
+                        <com.google.android.material.materialswitch.MaterialSwitch
+                            android:id="@+id/switchSwipeToStop"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            app:thumbTint="@color/switch_thumb_color"
+                            app:trackTint="@color/switch_track_color" />
+
+                    </LinearLayout>
+
+                    <!-- Sub-options for Swipe to Stop -->
+                    <LinearLayout
+                        android:id="@+id/swipeToStopSubOptions"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                        <!-- Watch Exception Toggle -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:layout_marginBottom="12dp">
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical"
+                                android:layout_marginEnd="16dp">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="@string/behavior_swipe_to_stop_watch_exception_title"
+                                    android:textSize="16sp"
+                                    android:textColor="@color/white_100" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="@string/behavior_swipe_to_stop_watch_exception_description"
+                                    android:textSize="14sp"
+                                    android:textColor="@color/purple_card_text_secondary"
+                                    android:layout_marginTop="4dp" />
+                            </LinearLayout>
+
+                            <com.google.android.material.materialswitch.MaterialSwitch
+                                android:id="@+id/switchWatchException"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                app:thumbTint="@color/switch_thumb_color"
+                                app:trackTint="@color/switch_track_color" />
+
+                        </LinearLayout>
+
+                        <!-- Auto-Cancel Toggle -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical"
+                                android:layout_marginEnd="16dp">
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="@string/behavior_swipe_to_stop_auto_cancel_title"
+                                    android:textSize="16sp"
+                                    android:textColor="@color/white_100" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="@string/behavior_swipe_to_stop_auto_cancel_description"
+                                    android:textSize="14sp"
+                                    android:textColor="@color/purple_card_text_secondary"
+                                    android:layout_marginTop="4dp" />
+                            </LinearLayout>
+
+                            <com.google.android.material.materialswitch.MaterialSwitch
+                                android:id="@+id/switchAutoCancel"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                app:thumbTint="@color/switch_thumb_color"
+                                app:trackTint="@color/switch_track_color" />
+
+                        </LinearLayout>
+
+                    </LinearLayout>
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
             <!-- Press to Stop Section -->
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/pressToStopCard"
@@ -2004,8 +2174,8 @@
                             android:layout_height="24dp"
                             android:layout_marginEnd="16dp"
                             android:src="@drawable/ic_twitter"
-                            android:tint="@color/white_100"
-                            android:contentDescription="Custom App Names" />
+                            android:contentDescription="Custom App Names"
+                            app:tint="@color/white_100" />
 
                         <TextView
                             android:layout_width="wrap_content"
@@ -2153,6 +2323,7 @@
 
             <!-- Delay Before Readout Section -->
             <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardDelayBeforeReadout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
@@ -2421,6 +2592,7 @@
 
             <!-- Cooldown Settings Section -->
             <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardNotificationCooldown"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
@@ -2577,6 +2749,7 @@
 
             <!-- Content Cap Section -->
             <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardContentCap"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
@@ -2765,7 +2938,10 @@
                             android:valueFrom="1"
                             android:valueTo="200"
                             android:stepSize="1"
-                            android:value="6" />
+                            android:value="6"
+                            app:thumbColor="@color/white_100"
+                            app:trackColorActive="@color/white_100"
+                            app:trackColorInactive="@color/white_200" />
 
                     </LinearLayout>
 
@@ -2805,7 +2981,10 @@
                             android:valueFrom="1"
                             android:valueTo="50"
                             android:stepSize="1"
-                            android:value="1" />
+                            android:value="1"
+                            app:thumbColor="@color/white_100"
+                            app:trackColorActive="@color/white_100"
+                            app:trackColorInactive="@color/white_200" />
 
                     </LinearLayout>
 
@@ -2845,7 +3024,10 @@
                             android:valueFrom="3"
                             android:valueTo="300"
                             android:stepSize="1"
-                            android:value="10" />
+                            android:value="10"
+                            app:thumbColor="@color/white_100"
+                            app:trackColorActive="@color/white_100"
+                            app:trackColorInactive="@color/white_200" />
 
                     </LinearLayout>
 
@@ -3004,7 +3186,10 @@
                             android:valueFrom="5"
                             android:valueTo="500"
                             android:stepSize="1"
-                            android:value="60" />
+                            android:value="60"
+                            app:thumbColor="@color/white_100"
+                            app:trackColorActive="@color/white_100"
+                            app:trackColorInactive="@color/white_200" />
 
                     </LinearLayout>
 
@@ -3148,23 +3333,25 @@
                         android:layout_marginBottom="12dp"
                         app:boxBackgroundMode="outline"
                         app:boxStrokeColor="@color/white_100"
-                        app:hintTextColor="@color/purple_card_text_secondary">
+                        app:hintTextColor="@color/white_100">
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/editCustomSpeechTemplate"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:minHeight="56dp"
                             android:hint="@string/hint_enter_format_placeholders"
                             android:inputType="textMultiLine"
                             android:maxLines="3"
-                            android:textSize="16sp"
-                            android:textColor="@color/purple_card_text_primary"
-                            android:textColorHint="@color/purple_card_text_secondary"
+                            android:minHeight="56dp"
                             android:paddingStart="16dp"
-                            android:paddingEnd="16dp"
                             android:paddingTop="16dp"
-                            android:paddingBottom="16dp" />
+                            android:paddingEnd="16dp"
+                            android:paddingBottom="16dp"
+                            android:textColor="@color/text_primary"
+                            android:textColorHint="@color/purple_card_text_secondary"
+                            android:textColorLink="@color/white_100"
+                            android:textCursorDrawable="@null"
+                            android:textSize="16sp" />
 
                     </com.google.android.material.textfield.TextInputLayout>
 
