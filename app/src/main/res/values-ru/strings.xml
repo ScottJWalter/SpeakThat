@@ -1728,4 +1728,7 @@
     <string name="unsaved_changes_message">У вас есть несохраненные изменения. Хотите ли вы сохранить их?</string>
     <string name="discard">Отменить</string>
     <string name="separator_period">Период</string>
+    <string name="filter_remove_emojis_advanced">Исключения из удаления эмодзи</string>
+    <string name="behavior_include_notification_timestamps_label">Включить отметки времени уведомлений</string>
+    <string name="behavior_include_notification_timestamps_desc">Используйте отметки времени уведомлений, чтобы отличать одинаковые сообщения в групповых чатах.</string>
 </resources>
