@@ -51,13 +51,14 @@ public class CompatibilitySettingsActivity extends AppCompatActivity {
     private static final String KEY_DUCKING_FALLBACK_STRATEGY = "ducking_fallback_strategy";
     private static final String KEY_NOTIFICATION_DEDUPLICATION = "notification_deduplication";
     private static final String KEY_INCLUDE_NOTIFICATION_TIMESTAMPS = "include_notification_timestamps";
+    private static final String KEY_SMART_MESSAGE_EXTRACTION = "smart_message_extraction";
     private static final String KEY_DISMISSAL_MEMORY_ENABLED = "dismissal_memory_enabled";
     private static final String KEY_DISMISSAL_MEMORY_TIMEOUT = "dismissal_memory_timeout";
     private static final String KEY_MEDIA_FILTERING_ENABLED = "media_filtering_enabled";
     private static final String KEY_SCO_DEVICES = "sco_devices";
 
     private static final int DEFAULT_AUDIO_USAGE = 0;
-    private static final int DEFAULT_CONTENT_TYPE = 0;
+    private static final int DEFAULT_CONTENT_TYPE = 1;
     private static final int VOICE_CALL_INDEX = 3;
 
     private ActivityResultLauncher<String[]> bluetoothPermissionLauncher;
@@ -146,7 +147,7 @@ public class CompatibilitySettingsActivity extends AppCompatActivity {
         });
 
         String[] contentTypeOptions = {
-            "Speech (Default)", "Music", "Notification Sound", "Sonification"
+            "Speech", "Music", "Notification Sound", "Sonification"
         };
         ArrayAdapter<String> contentTypeAdapter = new ArrayAdapter<>(this,
             android.R.layout.simple_spinner_item, contentTypeOptions);
@@ -386,6 +387,13 @@ public class CompatibilitySettingsActivity extends AppCompatActivity {
             }
         });
 
+        binding.switchSmartMessageExtraction.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            if (!isLoadingSettings) {
+                mainPrefs.edit().putBoolean(KEY_SMART_MESSAGE_EXTRACTION, isChecked).apply();
+                InAppLogger.log("CompatibilitySettings", "Smart message extraction " + (isChecked ? "enabled" : "disabled"));
+            }
+        });
+
         binding.btnDeduplicationInfo.setOnClickListener(v -> showDeduplicationDialog());
 
         binding.switchDismissalMemory.setOnCheckedChangeListener((buttonView, isChecked) -> {
@@ -461,6 +469,9 @@ public class CompatibilitySettingsActivity extends AppCompatActivity {
         boolean includeNotificationTimestamps = mainPrefs.getBoolean(KEY_INCLUDE_NOTIFICATION_TIMESTAMPS, false);
         binding.switchIncludeNotificationTimestamps.setChecked(includeNotificationTimestamps);
 
+        boolean smartMessageExtraction = mainPrefs.getBoolean(KEY_SMART_MESSAGE_EXTRACTION, true);
+        binding.switchSmartMessageExtraction.setChecked(smartMessageExtraction);
+
         boolean dismissalMemoryEnabled = mainPrefs.getBoolean(KEY_DISMISSAL_MEMORY_ENABLED, true);
         binding.switchDismissalMemory.setChecked(dismissalMemoryEnabled);
         binding.dismissalMemorySettingsSection.setVisibility(dismissalMemoryEnabled ? View.VISIBLE : View.GONE);
@@ -486,7 +497,7 @@ public class CompatibilitySettingsActivity extends AppCompatActivity {
                 "• Assistance: Uses navigation volume so speech stays audible even when ringer is muted\n\n" +
                 "\uD83C\uDFB5 Content Type\n" +
                 "Tells the system how to optimize audio processing:\n\n" +
-                "• Speech: Optimized for voice clarity (recommended)\n" +
+                "• Speech: Optimized for voice clarity\n" +
                 "• Music: Optimized for music playback\n" +
                 "• Notification Sound: For short notification sounds\n" +
                 "• Sonification: For UI sounds and alerts\n\n" +

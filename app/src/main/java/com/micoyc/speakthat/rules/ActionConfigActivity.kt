@@ -126,6 +126,10 @@ class ActionConfigActivity : AppCompatActivity() {
             setupOverrideSeparateDigitsUI()
         } else if (actionType == ActionType.OVERRIDE_CONTENT_CAP) {
             setupOverrideContentCapUI()
+        } else if (actionType == ActionType.OVERRIDE_AUDIO_STREAM) {
+            setupOverrideAudioStreamUI()
+        } else if (actionType == ActionType.APPLY_WORD_SWAPS) {
+            setupApplyWordSwapsUI()
         } else {
             InAppLogger.logError("ActionConfigActivity", "Unknown action type: $actionType")
             finish()
@@ -422,6 +426,126 @@ class ActionConfigActivity : AppCompatActivity() {
         edit.setSelection(newText.length)
     }
 
+    private fun setupOverrideAudioStreamUI() {
+        binding.cardOverrideAudioStream.visibility = View.VISIBLE
+        
+        val audioUsageOptions = arrayOf(
+            getString(com.micoyc.speakthat.R.string.voice_audio_usage_media_recommended),
+            getString(com.micoyc.speakthat.R.string.voice_audio_usage_notification),
+            getString(com.micoyc.speakthat.R.string.voice_audio_usage_alarm),
+            getString(com.micoyc.speakthat.R.string.voice_audio_usage_voice_call),
+            getString(com.micoyc.speakthat.R.string.voice_audio_usage_assistance)
+        )
+        
+        val adapter = android.widget.ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            audioUsageOptions
+        )
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        binding.spinnerAudioStream.adapter = adapter
+    }
+
+    private val wordSwapsList = mutableListOf<Pair<String, String>>()
+    private lateinit var wordSwapAdapter: WordSwapAdapter
+
+    private fun setupApplyWordSwapsUI() {
+        binding.cardApplyWordSwaps.visibility = View.VISIBLE
+        
+        wordSwapAdapter = WordSwapAdapter(wordSwapsList, 
+            { position -> 
+                wordSwapsList.removeAt(position)
+                wordSwapAdapter.notifyItemRemoved(position)
+                wordSwapAdapter.notifyItemRangeChanged(position, wordSwapsList.size)
+            },
+            { position -> 
+                showEditWordSwapDialog(position)
+            }
+        )
+        
+        binding.recyclerViewWordSwaps.apply {
+            layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this@ActionConfigActivity)
+            adapter = wordSwapAdapter
+        }
+        
+        binding.btnAddWordSwap.setOnClickListener {
+            showEditWordSwapDialog(-1)
+        }
+    }
+
+    private fun showEditWordSwapDialog(position: Int) {
+        val bottomSheetDialog = com.google.android.material.bottomsheet.BottomSheetDialog(this)
+        val view = layoutInflater.inflate(com.micoyc.speakthat.R.layout.bottom_sheet_edit_word_swap, null)
+        bottomSheetDialog.setContentView(view)
+
+        val editFrom = view.findViewById<com.google.android.material.textfield.TextInputEditText>(com.micoyc.speakthat.R.id.editFrom)
+        val editTo = view.findViewById<com.google.android.material.textfield.TextInputEditText>(com.micoyc.speakthat.R.id.editTo)
+        val btnSave = view.findViewById<com.google.android.material.button.MaterialButton>(com.micoyc.speakthat.R.id.btnSave)
+        val btnCancel = view.findViewById<com.google.android.material.button.MaterialButton>(com.micoyc.speakthat.R.id.btnCancel)
+
+        if (position >= 0) {
+            editFrom.setText(wordSwapsList[position].first)
+            editTo.setText(wordSwapsList[position].second)
+        }
+
+        btnSave.setOnClickListener {
+            val from = editFrom.text.toString().trim()
+            val to = editTo.text.toString().trim()
+
+            if (from.isEmpty()) {
+                android.widget.Toast.makeText(this, "Please enter a word or phrase to replace", android.widget.Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            if (position >= 0) {
+                wordSwapsList[position] = Pair(from, to)
+                wordSwapAdapter.notifyItemChanged(position)
+            } else {
+                wordSwapsList.add(Pair(from, to))
+                wordSwapAdapter.notifyItemInserted(wordSwapsList.size - 1)
+            }
+            bottomSheetDialog.dismiss()
+        }
+
+        btnCancel.setOnClickListener {
+            bottomSheetDialog.dismiss()
+        }
+
+        bottomSheetDialog.show()
+    }
+
+    private inner class WordSwapAdapter(
+        private val items: List<Pair<String, String>>,
+        private val onRemove: (Int) -> Unit,
+        private val onEdit: (Int) -> Unit
+    ) : androidx.recyclerview.widget.RecyclerView.Adapter<WordSwapAdapter.ViewHolder>() {
+        
+        inner class ViewHolder(view: View) : androidx.recyclerview.widget.RecyclerView.ViewHolder(view) {
+            val textFrom: android.widget.TextView = view.findViewById(com.micoyc.speakthat.R.id.textFrom)
+            val textTo: android.widget.TextView = view.findViewById(com.micoyc.speakthat.R.id.textTo)
+            val btnRemove: android.widget.ImageButton = view.findViewById(com.micoyc.speakthat.R.id.buttonRemove)
+            
+            init {
+                view.setOnClickListener { onEdit(adapterPosition) }
+                btnRemove.setOnClickListener { onRemove(adapterPosition) }
+            }
+        }
+
+        override fun onCreateViewHolder(parent: android.view.ViewGroup, viewType: Int): ViewHolder {
+            val view = android.view.LayoutInflater.from(parent.context)
+                .inflate(com.micoyc.speakthat.R.layout.item_word_swap, parent, false)
+            return ViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+            val item = items[position]
+            holder.textFrom.text = item.first
+            holder.textTo.text = item.second
+        }
+
+        override fun getItemCount() = items.size
+    }
+
     private fun dpToPx(value: Int): Int {
         return (value * resources.displayMetrics.density).toInt()
     }
@@ -476,6 +600,32 @@ class ActionConfigActivity : AppCompatActivity() {
             binding.sliderContentCapWordCount.value = wordCount.toFloat()
             binding.sliderContentCapSentenceCount.value = sentenceCount.toFloat()
             binding.sliderContentCapTimeLimit.value = timeLimit.toFloat()
+        } else if (actionType == ActionType.OVERRIDE_AUDIO_STREAM) {
+            val audioUsageIndex = (originalAction?.data?.get("audio_usage_index") as? Number)?.toInt() ?: 4
+            if (audioUsageIndex in 0..4) {
+                binding.spinnerAudioStream.setSelection(audioUsageIndex)
+            }
+        } else if (actionType == ActionType.APPLY_WORD_SWAPS) {
+            val swapsJson = originalAction?.data?.get("swaps_json") as? String ?: "[]"
+            val replaceGlobal = originalAction?.data?.get("replace_global") as? Boolean ?: false
+            
+            try {
+                val jsonArray = org.json.JSONArray(swapsJson)
+                wordSwapsList.clear()
+                for (i in 0 until jsonArray.length()) {
+                    val obj = jsonArray.getJSONObject(i)
+                    val from = obj.optString("from", "")
+                    val to = obj.optString("to", "")
+                    if (from.isNotEmpty()) {
+                        wordSwapsList.add(Pair(from, to))
+                    }
+                }
+                wordSwapAdapter.notifyDataSetChanged()
+            } catch (e: kotlin.Exception) {
+                InAppLogger.logError("ActionConfigActivity", "Failed to parse word swaps JSON: ${e.message}")
+            }
+            
+            binding.switchReplaceGlobalSwaps.isChecked = replaceGlobal
         }
     }
 
@@ -488,6 +638,8 @@ class ActionConfigActivity : AppCompatActivity() {
             ActionType.OVERRIDE_EMOJI_REMOVAL -> createOverrideEmojiRemovalAction()
             ActionType.OVERRIDE_SEPARATE_DIGITS -> createOverrideSeparateDigitsAction()
             ActionType.OVERRIDE_CONTENT_CAP -> createOverrideContentCapAction()
+            ActionType.OVERRIDE_AUDIO_STREAM -> createOverrideAudioStreamAction()
+            ActionType.APPLY_WORD_SWAPS -> createApplyWordSwapsAction()
             else -> createSkipNotificationAction()
         }
     }
@@ -702,6 +854,65 @@ class ActionConfigActivity : AppCompatActivity() {
         } else {
             Action(
                 type = ActionType.OVERRIDE_CONTENT_CAP,
+                description = description,
+                data = data
+            )
+        }
+    }
+
+    private fun createOverrideAudioStreamAction(): Action {
+        val audioUsageIndex = binding.spinnerAudioStream.selectedItemPosition
+        
+        val data = mapOf(
+            "audio_usage_index" to audioUsageIndex
+        )
+
+        val streamName = binding.spinnerAudioStream.selectedItem?.toString() ?: ""
+        val description = "${getString(com.micoyc.speakthat.R.string.action_override_audio_stream_title)}: $streamName"
+
+        return if (isEditing && originalAction != null) {
+            originalAction!!.copy(
+                type = ActionType.OVERRIDE_AUDIO_STREAM,
+                description = description,
+                data = data
+            )
+        } else {
+            Action(
+                type = ActionType.OVERRIDE_AUDIO_STREAM,
+                description = description,
+                data = data
+            )
+        }
+    }
+
+    private fun createApplyWordSwapsAction(): Action {
+        val replaceGlobal = binding.switchReplaceGlobalSwaps.isChecked
+        
+        val jsonArray = org.json.JSONArray()
+        for (swap in wordSwapsList) {
+            val obj = org.json.JSONObject()
+            obj.put("from", swap.first)
+            obj.put("to", swap.second)
+            jsonArray.put(obj)
+        }
+        val swapsJson = jsonArray.toString()
+        
+        val data = mapOf(
+            "swaps_json" to swapsJson,
+            "replace_global" to replaceGlobal
+        )
+
+        val description = getString(com.micoyc.speakthat.R.string.rule_action_apply_word_swaps)
+
+        return if (isEditing && originalAction != null) {
+            originalAction!!.copy(
+                type = ActionType.APPLY_WORD_SWAPS,
+                description = description,
+                data = data
+            )
+        } else {
+            Action(
+                type = ActionType.APPLY_WORD_SWAPS,
                 description = description,
                 data = data
             )

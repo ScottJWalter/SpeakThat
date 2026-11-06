@@ -34,6 +34,8 @@ sealed class Effect {
     ) : Effect()
     data object OverrideEmojiRemoval : Effect()
     data object OverrideSeparateDigits : Effect()
+    data class OverrideAudioStream(val audioUsageIndex: Int) : Effect()
+    data class ApplyWordSwaps(val swaps: List<Pair<String, String>>, val replaceGlobal: Boolean) : Effect()
 }
 
 data class EvaluationOutcome(

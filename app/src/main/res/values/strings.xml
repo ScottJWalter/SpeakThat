@@ -898,6 +898,8 @@ This feature is especially useful for accessibility, desk users, and anyone who 
     <string name="behavior_deduplication_benefits">Benefits:\n\n• Prevents annoying duplicate readouts\n• Saves battery by avoiding unnecessary TTS\n• Works automatically with 30-second window\n• Helps with apps that post multiple notifications</string>
     <string name="behavior_include_notification_timestamps_label">Include notification timestamps</string>
     <string name="behavior_include_notification_timestamps_desc">Use notification timestamps to distinguish between identical messages in group chats.</string>
+    <string name="behavior_smart_message_extraction_label">Smart message extraction</string>
+    <string name="behavior_smart_message_extraction_desc">Prevents reading the entire conversation history when receiving grouped messages.</string>
 
     <!-- Behaviour Settings - Dismissal Memory -->
     <string name="section_dismissal_memory">Dismissal Memory</string>
@@ -1029,6 +1031,8 @@ Block = completely ignore, Private = speak privately
     <string name="general_notification_while_reading_description">Show a notification when TTS is actively reading</string>
     <string name="general_show_system_blocks">Log system blocks in history</string>
     <string name="general_show_system_blocks_description">Saves background system events (like deduplication) to the history list. Helpful for troubleshooting.</string>
+    <string name="general_hide_filtered_notifications">Hide filtered notifications</string>
+    <string name="general_hide_filtered_notifications_description">Only show notifications read by SpeakThat, and hide any that were skipped</string>
     <string name="general_main_screen_history">Main Screen History</string>
     <string name="general_main_screen_history_description">Display recent notifications and diagnostics on the app\'s home screen.</string>
     <string name="general_toast_notifications_title">Enable Toast Notifications</string>
@@ -1155,8 +1159,8 @@ This permission is completely optional; SpeakThat! will still function without i
     <string name="voice_stream_volume">Stream Volume</string>
     <string name="voice_stream_volume_description">Control the volume level for the selected audio stream. This affects the device\'s volume for this stream type.</string>
     <string name="voice_content_type">Content Type</string>
-    <string name="voice_content_type_description">Tells the system what kind of audio this is. Speech is recommended for notifications.</string>
-    <string name="voice_audio_recommendation">Recommended: Media + Speech</string>
+    <string name="voice_content_type_description">Tells the system what kind of audio this is. Music is recommended for notifications.</string>
+    <string name="voice_audio_recommendation">Recommended: Media + Music</string>
     <string name="voice_speakerphone_option">Use Speakerphone for Voice Call</string>
     <string name="voice_speakerphone_description">Route Voice Call audio to speaker instead of earpiece for louder volume</string>
     <string name="voice_preview_actions">Preview &amp; Actions</string>
@@ -1854,6 +1858,7 @@ This permission is completely optional; SpeakThat! will still function without i
 
     <!-- Content Cap Feature Strings -->
     <string name="action_override_content_cap_title">Override Content Cap</string>
+    <string name="action_override_audio_stream_title">Override Audio Stream</string>
     <string name="action_override_content_cap_description">Enable or disable content cap for this notification</string>
     <string name="action_override_separate_digits_title">Keep Digits Together</string>
     <string name="action_override_separate_digits_description">Do not separate long numbers for this notification</string>
@@ -1862,6 +1867,8 @@ This permission is completely optional; SpeakThat! will still function without i
     <string name="action_override_emoji_removal_description">Do not strip emojis from this notification</string>
     <string name="rule_action_override_emoji_removal">keep emojis</string>
     <string name="rule_error_invalid_content_cap_mode">Invalid content cap mode</string>
+    <string name="rule_error_invalid_audio_stream">Invalid audio stream selection</string>
+    <string name="rule_audio_stream_volume_note">Note: This will use the volume slider associated with the selected stream.</string>
     <string name="content_cap_mode_label">Content Cap Mode:</string>
     <string name="content_cap_disabled">Disabled - Read full notification</string>
     <string name="content_cap_words">Word count limit</string>
@@ -2390,6 +2397,11 @@ This permission is completely optional; SpeakThat! will still function without i
     <string name="rule_action_force_private">Force private mode</string>
     <string name="rule_action_override_private">Override private mode</string>
     <string name="rule_action_use_voice_call">Use voice call audio routing</string>
+    <string name="rule_action_override_audio_stream">Override audio stream</string>
+    <string name="rule_action_apply_word_swaps">Apply word swaps</string>
+    <string name="rule_action_replace_global_swaps">Disable global word swaps for this notification</string>
+    <string name="rule_error_invalid_word_swaps">Invalid word swaps configuration</string>
+    <string name="button_add_word_swap">Add Word Swap</string>
 
     <!-- Rule validation: battery/charging -->
     <string name="rule_error_invalid_battery_mode">Battery mode must be above or below</string>
